@@ -235,5 +235,34 @@ async def main():
     return analises
 
 
+_cache = None
+
+
+def carregar_analises():
+    """Versão síncrona para usar em outros módulos. O scraping roda uma única vez."""
+    global _cache
+    if _cache is None:
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            _cache = asyncio.run(main())
+        else:
+            # Já existe um loop rodando (Jupyter / Interactive Window do VS Code):
+            # roda em outra thread, que tem o próprio loop.
+            from concurrent.futures import ThreadPoolExecutor
+
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                _cache = executor.submit(lambda: asyncio.run(main())).result()
+    return _cache
+
+
+def __getattr__(nome):
+    # Permite `from data.dadosPetz import analises` sem rodar o scraping no import do módulo:
+    # ele só roda quando `analises` é realmente pedido.
+    if nome == "analises":
+        return carregar_analises()
+    raise AttributeError(f"module {__name__!r} has no attribute {nome!r}")
+
+
 if __name__ == "__main__":
-    asyncio.run(main())
+    carregar_analises()

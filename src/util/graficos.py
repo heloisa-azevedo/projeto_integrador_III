@@ -1,5 +1,5 @@
 # %%
-from src.util.data.dadosPetz import analises
+from data.dadosPetz import analises
 
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -23,4 +23,4 @@ for _, analise in analises.items():
     htg(analise)
     
 
-plt.show()
+#plt.show()
