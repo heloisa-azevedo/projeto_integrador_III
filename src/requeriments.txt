@@ -1,0 +1,9 @@
+io
+re
+requests
+pandas
+matplotlib
+seaborn
+nest_asyncio
+bs4
+playwright.async_api
