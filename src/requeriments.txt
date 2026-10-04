@@ -1,9 +1,9 @@
-io
-re
+playwright
+beautifulsoup4
 requests
+ 
 pandas
+openpyxl
+ 
 matplotlib
 seaborn
-nest_asyncio
-bs4
-playwright.async_api
