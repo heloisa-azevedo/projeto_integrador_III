@@ -80,11 +80,6 @@ async def extrair_planilhas_por_ano():
 
         await browser.close()
 
-    print("Textos de links de planilha vistos no site:")
-    for t in sorted(textos_vistos, reverse=True):
-        print("  ", t)
-    print("Links selecionados:", links_encontrados)
-
     dados_empresas = {}
     headers = {"User-Agent": "Mozilla/5.0"}
     for empresa, url_planilha in links_encontrados.items():
@@ -211,26 +206,20 @@ def montar_modelo_analitico_trimestral(dados_da_empresa):
 
 # 5. EXECUÇÃO MESTRE
 async def main():
-    print("🌐 1/2 Iniciando extração dos dados direto do RI...")
+    print("1/2 Iniciando extração dos dados direto do RI...")
     dados_gerais = await extrair_planilhas_por_ano()
 
     faltando = [e for e in ("Petz", "Cobasi", "Fusão") if e not in dados_gerais]
     if faltando:
-        print(f"⚠️ Planilhas não carregadas: {faltando}. Seguindo com: {list(dados_gerais)}")
+        print(f"Planilhas não carregadas: {faltando}. Seguindo com: {list(dados_gerais)}")
     if not dados_gerais:
         raise RuntimeError("Nenhuma planilha foi carregada.")
 
-    print("🚀 2/2 Construindo modelos analíticos (IFRS/IAS17)...")
+    print("2/2 Construindo modelos analíticos (IFRS/IAS17)...")
     analises = {
         nome: montar_modelo_analitico_trimestral(dados)
         for nome, dados in dados_gerais.items()
     }
-
-    print("\n✅ Concluído com sucesso! \n")
-    for nome, analise in analises.items():
-        print(f"--- VISÃO ANALÍTICA: {nome.upper()} (Últimos 6 Trimestres) ---")
-        print(analise.tail(6))
-        print()
 
     return analises
 
