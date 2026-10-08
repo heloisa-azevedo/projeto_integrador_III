@@ -13,12 +13,4 @@ def correlacao(data):
 def htg(data):
     return data.hist(figsize=(15, 13))
 
-#%%
-
-for _, analise in analises.items():
-    
-    correlacao(analise)
-    htg(analise)
-    
-
 #plt.show()
