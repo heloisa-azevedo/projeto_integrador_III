@@ -1,7 +1,7 @@
 #LOCAL QUE A ANALISE DEVE OCORRER
 import streamlit as st
 import html
-import html
+from io import StringIO
 
 import matplotlib.pyplot as plt
 import seaborn as sns
