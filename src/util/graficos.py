@@ -24,4 +24,10 @@ def correlacao(data):
 def htg(data):
     return data.hist(figsize=(15, 13))
 
+def linha(data, x:str, y:str):
+    fig_lin, ax = plt.subplots()
+    sns.lineplot(x=x, y=y, data=data, ax=ax)
+    plt.xticks(rotation=45, ha='right')
+    return fig_lin
+
 #plt.show()
