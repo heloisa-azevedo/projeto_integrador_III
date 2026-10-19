@@ -1,6 +1,7 @@
 #LOCAL QUE A ANALISE DEVE OCORRER
 import streamlit as st
 import html
+import html
 
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -26,15 +27,34 @@ st.markdown(
 st.divider()
 
 opcao = st.multiselect("Selecione o conjunto de dados:", ['Petz', 'Cobasi'], max_selections=1)
+empresa = opcao[0]
 
 if len(opcao) != 1:
     st.info("É preciso selecionar um conjunto de dados.")
     st.stop()
 
-df = analises[opcao[0]]
+df = analises[empresa]
+
+st.subheader(f"Exibição do conjunto de dados da {empresa}", text_alignment='center')
+
+buffer = StringIO()
+df.info(buf=buffer)
+st.markdown(
+    """
+    <style>
+    pre code {
+        color: white !important;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+st.code(buffer.getvalue(), language="text")
 
 st.dataframe(df)
 
-st.subheader(f"Correlaçao entre os dados de {opcao[0]}", text_alignment='center')
+st.dataframe(df.describe())
+
+st.subheader(f"Correlaçao entre os dados da {empresa}", text_alignment='center')
 fig_corr = correlacao(df)
 st.pyplot(fig_corr)
