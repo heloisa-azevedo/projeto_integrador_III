@@ -112,8 +112,8 @@ st.markdown("""
 
 # ---------- BUSCA DE DADOS (com cache) ----------
 @st.cache_data(ttl=3600)
-def buscar_dados_perfil(username):
-    url = f"https://api.github.com/users/{username}"
+def buscar_dados_perfil(username_github):
+    url = f"https://api.github.com/users/{username_github}"
     try:
         res = requests.get(url, timeout=5)
         if res.status_code == 200:
@@ -124,10 +124,10 @@ def buscar_dados_perfil(username):
 
 
 @st.cache_data(ttl=3600)
-def buscar_readme(username):
+def buscar_readme(username_github):
     # README de perfil fica no repositório com o mesmo nome do usuário
     for branch in ("main", "master"):
-        url = f"https://raw.githubusercontent.com/{username}/{username}/{branch}/README.md"
+        url = f"https://raw.githubusercontent.com/{username_github}/{username_github}/{branch}/README.md"
         try:
             res = requests.get(url, timeout=5)
             if res.status_code == 200:
@@ -138,26 +138,26 @@ def buscar_readme(username):
 
 
 # ---------- CARD ----------
-def renderizar_criador(username, container):
-    dados = buscar_dados_perfil(username)
-    readme_text = buscar_readme(username)
+def renderizar_criador(username_github, username_linkeidn, container):
+    dados = buscar_dados_perfil(username_github)
+    readme_text = buscar_readme(username_github)
 
     if not dados:
         container.warning(
-            f"Não foi possível carregar o perfil de @{username}. "
+            f"Não foi possível carregar o perfil de @{username_github}. "
             "Verifique o username ou tente novamente em instantes."
         )
         return
 
-    nome = html.escape(dados.get("name") or username)
+    nome = html.escape(dados.get("name") or username_github)
     bio = html.escape(dados.get("bio") or "")
     avatar = html.escape(dados.get("avatar_url") or "")
     local = dados.get("location")
     empresa = dados.get("company")
-    perfil_url = dados.get("html_url") or f"https://github.com/{username}"
-    linkedin_url = f"https://www.linkedin.com/in/{username}/"
+    perfil_url = dados.get("html_url") or f"https://github.com/{username_github}"
+    linkedin_url = f"https://www.linkedin.com/in/{username_linkeidn}/"
 
-    with container.container(border=True, key=f"card-{username}"):
+    with container.container(border=True, key=f"card-{username_github}"):
         # Cabeçalho
         if avatar:
             st.markdown(f'<img class="avatar" src="{avatar}">', unsafe_allow_html=True)
@@ -199,9 +199,9 @@ def renderizar_criador(username, container):
 # ---------- CONFIGURAÇÃO ----------
 # Chave: nome de exibição | Valor: username (igual no GitHub e no LinkedIn)
 criadores = {
-    "Felipe Nunes": "finusz",
-    "Heloísa Azevedo": "heloisa-azevedo",
-    "Catharina Gato": "gatocatharinap",
+    "Felipe Nunes": ["finusz", "finusz"],
+    "Heloísa Azevedo": ["heloisa-azevedo", "heloisa-azevedo"],
+    "Catharina Gato": ["gatocatharinap", "catharina-gato-b4246537b"],
 }
 
 # ---------- INTERFACE ----------
@@ -225,5 +225,5 @@ st.markdown(
 )
 
 colunas = st.columns(len(criadores), gap="large")
-for coluna, username in zip(colunas, criadores.values()):
-    renderizar_criador(username, coluna)
+for coluna, usernames in zip(colunas, criadores.values()):
+    renderizar_criador(usernames[0], usernames[1], coluna)
