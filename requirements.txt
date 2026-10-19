@@ -1,4 +1,5 @@
 streamlit
+StringIO
 
 playwright
 beautifulsoup4
