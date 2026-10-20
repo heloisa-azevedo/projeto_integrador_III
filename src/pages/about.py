@@ -13,7 +13,7 @@ st.markdown("""
 
 /* ---- Card marrom com texto branco ---- */
 [class*="st-key-card-"] {
-    background-color: #6d5b4f;
+    background-color: #93b7cc;
     border: none;
     border-radius: 24px;
     padding: 1.5rem;
@@ -28,7 +28,7 @@ st.markdown("""
 [class*="st-key-card-"] h2,
 [class*="st-key-card-"] h3,
 [class*="st-key-card-"] li {
-    color: white;
+    color: black;
 }
 [class*="st-key-card-"] p,
 [class*="st-key-card-"] li,
@@ -44,9 +44,9 @@ st.markdown("""
 /* Botões (GitHub e LinkedIn): brancos com texto marrom */
 [class*="st-key-card-"] a[kind],
 [class*="st-key-card-"] a[kind] * {
-    background-color: white;
-    color: #6d5b4f;
-    border-color: white;
+    background-color: #F6F4EA;
+    color: #black;
+    border-color: #F6F4EA;
 }
 
 /* Expander transparente com borda clara */
