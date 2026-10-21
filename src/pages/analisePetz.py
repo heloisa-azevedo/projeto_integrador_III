@@ -76,5 +76,5 @@ st.divider()
 st.subheader(f"Comportamento da empresa ao longo do tempo")
 
 col_a = st.selectbox("Selecione a métrica a sem comparada:", df_petz.columns)
-fig_lin = linha(df_petz, df_fusao,"Trimestre", col_a, "Petz")
+fig_lin = linha(df_petz, df_fusao,"Trimestre", col_a, "Petz", ["#93b7cc", "#1D2858"])
 st.pyplot(fig_lin)

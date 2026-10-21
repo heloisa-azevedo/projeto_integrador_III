@@ -40,10 +40,10 @@ def correlacao(data):
 def htg(data):
     return data.hist(figsize=(15, 13))
 
-def linha(data, data2, x:str, y:str, empresa:str):
+def linha(data, data2, x:str, y:str, empresa:str, paleta_cores:list[str]):
     fig_lin, ax = plt.subplots()
-    sns.lineplot(x=x, y=y, data=data, ax=ax, label=empresa)
-    sns.lineplot(x=x, y=y, data=data2, ax=ax, label="Fusão")
+    sns.lineplot(x=x, y=y, data=data, ax=ax, label=empresa, color=paleta_cores[0])
+    sns.lineplot(x=x, y=y, data=data2, ax=ax, label="Fusão", color=paleta_cores[1])
         
     plt.xticks(rotation=45, ha='right')
     plt.legend(title= "Empresas", loc= "upper left")
