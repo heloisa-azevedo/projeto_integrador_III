@@ -1,6 +1,7 @@
 import streamlit as st
 
 import matplotlib.pyplot as plt
+import matplotlib.ticker as ticker
 import seaborn as sns
 from io import StringIO
 
@@ -40,13 +41,20 @@ def correlacao(data):
 def htg(data):
     return data.hist(figsize=(15, 13))
 
-def linha(data, data2, x:str, y:str, empresa:str, paleta_cores:list[str]):
+def linha(data, x:str, y:str, empresa=None, data2=None, empresa2=None):
     fig_lin, ax = plt.subplots()
-    sns.lineplot(x=x, y=y, data=data, ax=ax, label=empresa, color=paleta_cores[0])
-    sns.lineplot(x=x, y=y, data=data2, ax=ax, label="Fusão", color=paleta_cores[1])
-        
+    sns.lineplot(x=x, y=y, data=data, ax=ax, label=empresa)
+    if data2 is not None:
+        sns.lineplot(x=x, y=y, data=data2, ax=ax, label=empresa2)
+        plt.legend(title= "Empresas", loc= "upper left")
+
+    formatter = ticker.ScalarFormatter()
+    formatter.set_scientific(False)
+    ax.yaxis.set_major_formatter(formatter)
+
+    plt.ylabel(f"{y} em R$")
+    
     plt.xticks(rotation=45, ha='right')
-    plt.legend(title= "Empresas", loc= "upper left")
 
     plt.tight_layout() 
     return fig_lin
