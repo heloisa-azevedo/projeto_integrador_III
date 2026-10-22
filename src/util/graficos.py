@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 import seaborn as sns
 from io import StringIO
+import plotly.graph_objects as go
 
 import pandas as pd
 
@@ -41,22 +42,48 @@ def correlacao(data):
 def htg(data):
     return data.hist(figsize=(15, 13))
 
-def linha(data, x:str, y:str, empresa=None, data2=None, empresa2=None):
-    fig_lin, ax = plt.subplots()
-    sns.lineplot(x=x, y=y, data=data, ax=ax, label=empresa)
-    if data2 is not None:
-        sns.lineplot(x=x, y=y, data=data2, ax=ax, label=empresa2)
-        plt.legend(title= "Empresas", loc= "upper left")
+import plotly.graph_objects as go
 
-    formatter = ticker.ScalarFormatter()
-    formatter.set_scientific(False)
-    ax.yaxis.set_major_formatter(formatter)
-
-    plt.ylabel(f"{y} em R$")
+def linha(lista_dados, x: str, y: str, lista_empresas):
+    fig = go.Figure()
     
-    plt.xticks(rotation=45, ha='right')
+    for i, (data, empresa) in enumerate(zip(lista_dados, lista_empresas)):
+        fig.add_trace(go.Scatter(
+            x=data.index, 
+            y=data[y], 
+            mode='lines+markers',
+            name=empresa
+        ))
 
-    plt.tight_layout() 
-    return fig_lin
+    def chave_trimestre(rotulo):
+        rotulo = str(rotulo)
+        trimestre, ano = rotulo.split('T')
+        return (int(ano), int(trimestre))
+
+    todos_trimestres = set()
+    for data in lista_dados:
+        todos_trimestres.update(data.index)
+
+    ordem = sorted(todos_trimestres, key=chave_trimestre)
+    
+    fig.update_layout(
+        yaxis_title=f"{y} em R$",
+        xaxis_title=x,
+        legend_title="Empresas",
+        xaxis=dict(
+            tickangle=-45,
+            type='category',
+            categoryorder='array',
+            categoryarray=ordem
+        ),
+        yaxis=dict(
+            tickformat=',.2f',
+            exponentformat="none"
+        ),
+        template="plotly_white",
+        margin=dict(l=40, r=40, t=40, b=80)
+    )
+    
+    return fig
 
 #plt.show()
