@@ -79,6 +79,32 @@ for i, aba in enumerate(abas):
 
         st.subheader(f"Informações sobre o conjunto de dados da {empresa}")
         st.dataframe(df)
+
+        if empresa == "Fusão":
+            st.markdown(
+                """
+                <style>
+                
+                div.stAlert {
+                    background-color: #b0ddf7  !important;        
+                    border-radius: 6px !important;
+                    text-align: center !important;
+                }
+                
+                
+                div.stAlert svg {
+                    fill: #1D2858 !important;
+                }
+                div.stAlert p {
+                    color: #1D2858 !important;
+                }
+                </style>
+                """,
+                unsafe_allow_html=True
+            )
+
+            st.warning("Os dados presentes antes de 2026 são suposições de como seria se as empresas Petz e Cobasi tivessem se fundido anteriormente")
+
         st.dataframe(df.describe())
 
         st.subheader(f"Correlaçao entre os dados da {empresa}", text_alignment='center')
@@ -87,14 +113,15 @@ for i, aba in enumerate(abas):
 
         st.divider()
 
-        if empresa != "Fusão":
-            st.subheader(f"Comportamento da empresa {empresa} antes e após a Fusão", text_alignment='center')
-            col_a = st.selectbox("Selecione a métrica a sem comparada:", df.columns, key=f"metrica_{i}")
-            fig_lin = linha(df, "Trimestre", col_a, empresa, analises["Fusão"], "Fusão")
-        
-        else:
-            st.subheader("Comportamento da empresa Fundida ao longo do tempo", text_alignment='center')
-            col_a = st.selectbox("Selecione a métrica a sem comparada:", df.columns, key=f"metrica_{i}")
-            fig_lin = linha(df, "Trimestre", col_a)
+st.subheader("Comportamento das empresas ao longo do tempo", text_alignment='center')
 
-        st.pyplot(fig_lin)
+col_a = st.selectbox("Selecione a métrica a ser comparada:", df.columns)
+
+fig_lin = linha(
+    lista_dados=list(analises.values()), 
+    x="Trimestre", 
+    y=col_a, 
+    lista_empresas=empresas
+)
+
+st.plotly_chart(fig_lin, use_container_width=True)
