@@ -9,6 +9,9 @@ from src.util.graficos import correlacao, linha, info
 
 from src.data import dadosPetz
 
+from src.util.extrator_noticias import contexto_para_llm
+from src.util.llm import explicar_variacoes, linkar_fontes
+
 @st.cache_data(ttl=60 * 60 * 24, show_spinner="Buscando dados no RI, pode levar alguns instantes...")
 def obter_analises():
     return dadosPetz.carregar_analises()
@@ -125,3 +128,31 @@ fig_lin = linha(
 )
 
 st.plotly_chart(fig_lin, use_container_width=True)
+
+
+@st.cache_data(ttl=60 * 60 * 24, show_spinner="Buscando notícias, pode levar alguns instantes...")
+def obter_contexto(empresa, coluna, df_coluna):
+    nome_busca = "Petz Cobasi" if empresa == "Fusão" else empresa
+    return contexto_para_llm(df_coluna, nome_busca, top=3, retornar_fontes=True)
+
+
+@st.cache_data(ttl=60 * 60 * 24, show_spinner="Gerando explicação...")
+def obter_explicacao(empresa, coluna, contexto):
+    return explicar_variacoes(empresa, coluna, contexto)
+
+
+st.subheader("Por que a métrica variou?", text_alignment='center')
+st.caption("Explicação gerada por IA a partir de notícias do período. Confira as fontes na aba ao lado.")
+
+for empresa, df_emp in analises.items():
+    with st.expander(f"{empresa} — {col_a}"):
+        try:
+            contexto, fontes = obter_contexto(empresa, col_a, df_emp[[col_a]])
+            explicacao = obter_explicacao(empresa, col_a, contexto)
+        except Exception as e:
+            st.error(f"Não foi possível gerar a explicação agora: {e}")
+            continue
+
+        aba_exp, aba_not = st.tabs(["Explicação", "Notícias usadas"])
+        aba_exp.markdown(linkar_fontes(explicacao, fontes))
+        aba_not.markdown(contexto)

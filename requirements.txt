@@ -3,6 +3,9 @@ streamlit
 playwright
 beautifulsoup4
 requests
+trafilatura
+lxml
+googlenewsdecoder
  
 pandas
 openpyxl
@@ -10,3 +13,6 @@ openpyxl
 matplotlib
 seaborn
 plotly
+
+groq
+ollama

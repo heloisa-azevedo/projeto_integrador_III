@@ -3,8 +3,6 @@ from pathlib import Path
 
 main_page = st.Page("src/pages/main_page.py", title="Home")
 analyse_page = st.Page("src/pages/analyse.py", title="Analise Empresas")
-petz_page = st.Page("src/pages/analisePetz.py", title="Analise Petz")
-cobasi_page = st.Page("src/pages/analiseCobasi.py", title="Analise Cobasi")
 about_page = st.Page("src/pages/about.py", title="Sobre")
 
 LOGO = Path(__file__).parent / "assets" / "logo_petzcobasi.png"
@@ -32,7 +30,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
-pg = st.navigation([main_page, analyse_page, petz_page, cobasi_page, about_page])
+pg = st.navigation([main_page, analyse_page, about_page])
 
 pg.run()
 #python -m streamlit run app.py

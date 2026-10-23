@@ -67,7 +67,7 @@ def linha(lista_dados, x: str, y: str, lista_empresas):
     ordem = sorted(todos_trimestres, key=chave_trimestre)
     
     fig.update_layout(
-        yaxis_title=f"{y} em R$",
+        yaxis_title=f"{y.replace("_", " ")} em R$",
         xaxis_title=x,
         legend_title="Empresas",
         xaxis=dict(
