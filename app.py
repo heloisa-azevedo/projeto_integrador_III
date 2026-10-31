@@ -1,36 +1,29 @@
-import streamlit as st
 from pathlib import Path
 
-main_page = st.Page("src/pages/main_page.py", title="Home")
-analyse_page = st.Page("src/pages/analyse.py", title="Analise Empresas")
-about_page = st.Page("src/pages/about.py", title="Sobre")
+import streamlit as st
 
-LOGO = Path(__file__).parent / "assets" / "logo_petzcobasi.png"
+from src.util.estilo import aplicar_estilo
 
-st.logo(str(LOGO), size="large")
-
-st.markdown(
-    """
-    <style>
-    [data-testid="stLogo"],
-    [data-testid="stSidebarLogo"],
-    [data-testid="stSidebarHeader"] img {
-        height: 7rem !important;
-        max-height: none !important;
-        width: auto !important;
-        max-width: 100% !important;
-    }
-    [data-testid="stSidebarHeader"] {
-        height: auto !important;
-        min-height: 7rem;
-        padding-top: 1rem;
-        padding-bottom: 0.5rem;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
+# set_page_config fica aqui (e só aqui), antes de qualquer outro comando
+st.set_page_config(
+    page_title="Petz Cobasi | Antes e depois da fusão",
+    page_icon="🐾",
+    layout="wide",
 )
-pg = st.navigation([main_page, analyse_page, about_page])
 
-pg.run()
-#python -m streamlit run app.py
+ASSETS = Path(__file__).parent / "assets"
+# Versão recortada (sem a margem transparente) em azul-marinho, para a sidebar azul-clara
+st.logo(str(ASSETS / "logo_petzcobasi_marinho.png"), size="large")
+aplicar_estilo()
+
+paginas = [
+    st.Page("src/pages/main_page.py", title="Início", icon=":material/home:", default=True),
+    st.Page("src/pages/analyse.py", title="Análise", icon=":material/insights:"),
+    st.Page("src/pages/explicacoes.py", title="Por que variou?", icon=":material/auto_awesome:"),
+    st.Page("src/pages/conclusao.py", title="Conclusão", icon=":material/task_alt:"),
+    st.Page("src/pages/metodologia.py", title="Dados e método", icon=":material/table_chart:"),
+    st.Page("src/pages/about.py", title="Sobre", icon=":material/groups:"),
+]
+st.navigation(paginas).run()
+
+# python -m streamlit run app.py

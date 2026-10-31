@@ -4,7 +4,6 @@ import html
 import requests
 import streamlit as st
 
-st.set_page_config(layout="wide")
 
 # ---------- CSS ----------
 st.markdown("""
@@ -45,7 +44,7 @@ st.markdown("""
 [class*="st-key-card-"] a[kind],
 [class*="st-key-card-"] a[kind] * {
     background-color: #F6F4EA;
-    color: #black;
+    color: black;
     border-color: #F6F4EA;
 }
 
@@ -138,20 +137,17 @@ def buscar_readme(username_github):
 
 
 # ---------- CARD ----------
-def renderizar_criador(username_github, username_linkeidn, container):
+def renderizar_criador(nome_exibicao, username_github, username_linkeidn, container):
     dados = buscar_dados_perfil(username_github)
     readme_text = buscar_readme(username_github)
 
     if not dados:
-        container.warning(
-            f"Não foi possível carregar o perfil de @{username_github}. "
-            "Verifique o username ou tente novamente em instantes."
-        )
-        return
+        # Sem internet ou limite da API do GitHub: mostra o card mesmo assim
+        dados = {"name": nome_exibicao, "html_url": f"https://github.com/{username_github}"}
 
     nome = html.escape(dados.get("name") or username_github)
     bio = html.escape(dados.get("bio") or "")
-    avatar = html.escape(dados.get("avatar_url") or "")
+    avatar = html.escape(dados.get("avatar_url") or f"https://github.com/{username_github}.png")
     local = dados.get("location")
     empresa = dados.get("company")
     perfil_url = dados.get("html_url") or f"https://github.com/{username_github}"
@@ -178,15 +174,16 @@ def renderizar_criador(username_github, username_linkeidn, container):
         st.divider()
 
         # Métricas
-        m1, m2, m3 = st.columns(3)
-        m1.metric("Repositórios", dados.get("public_repos", 0))
-        m2.metric("Seguidores", dados.get("followers", 0))
-        m3.metric("Seguindo", dados.get("following", 0))
+        if "public_repos" in dados:
+            m1, m2, m3 = st.columns(3)
+            m1.metric("Repositórios", dados.get("public_repos", 0))
+            m2.metric("Seguidores", dados.get("followers", 0))
+            m3.metric("Seguindo", dados.get("following", 0))
 
         # Botões (GitHub e LinkedIn)
         b1, b2 = st.columns(2)
-        b1.link_button("GitHub", perfil_url, use_container_width=True)
-        b2.link_button("LinkedIn", linkedin_url, use_container_width=True)
+        b1.link_button("GitHub", perfil_url, width="stretch")
+        b2.link_button("LinkedIn", linkedin_url, width="stretch")
 
         # README dentro de um expander
         with st.expander("📄 Ver README do perfil"):
@@ -214,7 +211,8 @@ st.markdown(
     "<p style='text-align:center; max-width:800px; margin:0 auto 2rem'>"
     "Este app foi desenvolvido ao longo da disciplina de Projeto Integrador III, "
     "parte da grade do curso de Ciência de Dados da Faculdade de Tecnologia de Cotia (FATEC Cotia). "
-    "Seu objetivo é analisar os dados financeiros públicos da grupo Petz Cobasi"
+    "O objetivo é analisar os dados financeiros públicos do grupo Petz Cobasi, publicados na Planilha Interativa do RI, "
+    "e avaliar se a fusão aumentou o poder de mercado da empresa."
     "</p>",
     unsafe_allow_html=True,
 )
@@ -225,5 +223,5 @@ st.markdown(
 )
 
 colunas = st.columns(len(criadores), gap="large")
-for coluna, usernames in zip(colunas, criadores.values()):
-    renderizar_criador(usernames[0], usernames[1], coluna)
+for coluna, (nome_exibicao, usernames) in zip(colunas, criadores.items()):
+    renderizar_criador(nome_exibicao, usernames[0], usernames[1], coluna)

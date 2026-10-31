@@ -1,18 +1,23 @@
-streamlit
+streamlit==1.66.1
+plotly==7.1.0
+pandas>=2.2
+numpy>=1.26
+openpyxl>=3.1
 
-playwright
-beautifulsoup4
-requests
+# scraping do RI
+playwright>=1.47
+beautifulsoup4>=4.12
+requests>=2.32
+
+# notícias
 trafilatura
 lxml
 googlenewsdecoder
- 
-pandas
-openpyxl
- 
+
+# exploração dos dados
 matplotlib
 seaborn
-plotly
 
+# IA
 groq
 ollama

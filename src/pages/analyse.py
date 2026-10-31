@@ -1,158 +1,168 @@
-#LOCAL QUE A ANALISE DEVE OCORRER
+"""Análise antes × depois da fusão: as mesmas sete seções do painel interativo."""
+import pandas as pd
 import streamlit as st
-import html
-from io import StringIO
 
-import matplotlib.pyplot as plt
-import seaborn as sns
-from src.util.graficos import correlacao, linha, info
+from src.analysis.indicadores import rotulo_trimestre
+from src.util.componentes import barra_lateral_dados, cuidados, destaques, exigir_base, leitura, legenda_limiares, quadro
+from src.util.estilo import fmt_int, fmt_pct, fmt_reais_mi
+from src.util.graficos import CONFIG, grafico_barras, grafico_cidades, grafico_linhas
 
-from src.data import dadosPetz
+barra_lateral_dados()
+base, _ = exigir_base()
+ind = base["indicadores"]
+tend = base["tendencias"]
 
-from src.util.extrator_noticias import contexto_para_llm
-from src.util.llm import explicar_variacoes, linkar_fontes
-
-@st.cache_data(ttl=60 * 60 * 24, show_spinner="Buscando dados no RI, pode levar alguns instantes...")
-def obter_analises():
-    return dadosPetz.carregar_analises()
-
-analises = obter_analises()
-
-st.title("Analise do RI do grupo Petz Cobasi", text_alignment='center')
+st.title("Antes e depois da fusão")
 st.markdown(
-    "<p style='text-align:center; max-width:800px; margin:0 auto 2rem'>"
-    "O objetivo da analise é descobrir se dada uma das empresas do grupo, era favorável para realizar a fusão. "
-    "A hipotese vai ser medida sobre o poder de mercado, analisando o aumento de suas margens de lucro, "
-    "comparando-as a antes e depois da fusão ser realizada."
-    "</p>",
+    '<p class="pc-lead">De 1T23 a 4T25 os números são pro forma da companhia, como se Petz e Cobasi já fossem uma só '
+    "empresa; 1T26 e 2T26 são o grupo combinado. A área sombreada dos gráficos marca o período pós-fusão.</p>",
     unsafe_allow_html=True,
-    )
-st.divider()
-
-empresas = list(analises.keys())
-abas = st.tabs(empresas)
-
-for i, aba in enumerate(abas):
-    with aba:
-        empresa = empresas[i]
-        df = analises[empresa]
-        st.header(f"Analise referente à {empresa}")
-        info(df)
-        st.markdown(
-            f"""
-            <div style="max-width:800px; margin:0 auto 2rem;">
-                <p style="text-align:left; font-weight:bold;">Informações gerais sobre o dataset:, sendo:</p>
-                <ul style="margin: 0 auto; text-align: left;">
-                    <li><strong>Número de itens vazios:</strong> - {df.isna().sum().sum()};</li>
-                    <li><strong>Quantidade de colunas:</strong> - {len(df.columns)};</li>
-                    <li><strong>Quantidade de linhas:</strong> - {len(df)};</li>
-                    <li><strong>Tipo de dados presentes:</strong> - {df.dtypes}.</li>                              
-                </ul>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )    
-
-        st.markdown(
-            """
-            <div style="max-width:800px; margin:0 auto 2rem;">
-                <p style="text-align:left; font-weight:bold;">Foram escolhidas 16 colunas para realizar a análise, sendo:</p>
-                <ul style="margin: 0 auto; text-align: left;">
-                    <li><strong>Receita Bruta</strong> - Faturamento total da empresa;</li>
-                    <li><strong>Receita Líquida</strong> -  Valor total das vendas ou serviços prestados;</li>
-                    <li><strong>EBITDA Ajustado</strong> -  Uma métrica financeira não GAAP que fornece uma visão normalizada do desempenho operacional;</li>
-                    <li><strong>Lucro Líquido</strong> - Ganho real sobre as operações;</li>
-                    <li><strong>Caixa Equivalente</strong> - O dinheiro vivo que a empresa tem disponível imediatamente ou aplicações de liquidez imediata;</li>
-                    <li><strong>Aplicações Financeiras</strong> - Investimentos feitos pela empresa; </li>
-                    <li><strong>Empréstimos CP</strong> - Obrigações financeiras que devem ser pagas em até 12 meses;</li>
-                    <li><strong>Empréstimos LP</strong> - Obrigações financeiras que devem ser pegas num período superior a 12 meses;</li>
-                    <li><strong>Estoque</strong> - Valor financeiro total de mercadorias;</li>
-                    <li><strong>Fluxo de Caixa Operacional</strong> - O dinheiro real gerado pelas operações do dia a dia da empresa;</li>
-                    <li><strong>SSS Percentual</strong> - Indicador que mede o crescimento das vendas apenas das lojas que já estavam abertas há mais de 12 meses;</li>
-                    <li><strong>Penetração Digital</strong> - Percentual das vendas totais da empresa que foram realizadas por canais digitais;</li>
-                    <li><strong>Margem EBITDA</strong> - Indica a rentabilidade operacional da empresa;</li>
-                    <li><strong>Dívida Bruta</strong> - Soma de todas as obrigações financeiras da empresa;</li>
-                    <li><strong>Caixa Total</strong> - Soma de todo o dinheiro disponível e das reservas financeiras da empresa;</li>
-                    <li><strong>Dívida Líquida</strong> - Situação Geral de endividamento da empresa.</li>
-                </ul>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-
-        st.subheader(f"Informações sobre o conjunto de dados da {empresa}")
-        st.dataframe(df)
-
-        if empresa == "Fusão":
-            st.markdown(
-                """
-                <style>
-                
-                div.stAlert {
-                    background-color: #b0ddf7  !important;        
-                    border-radius: 6px !important;
-                    text-align: center !important;
-                }
-                
-                
-                div.stAlert svg {
-                    fill: #1D2858 !important;
-                }
-                div.stAlert p {
-                    color: #1D2858 !important;
-                }
-                </style>
-                """,
-                unsafe_allow_html=True
-            )
-
-            st.warning("Os dados presentes antes de 2026 são suposições de como seria se as empresas Petz e Cobasi tivessem se fundido anteriormente")
-
-        st.dataframe(df.describe())
-
-        st.subheader(f"Correlaçao entre os dados da {empresa}", text_alignment='center')
-        fig_corr = correlacao(df)
-        st.pyplot(fig_corr)
-
-        st.divider()
-
-st.subheader("Comportamento das empresas ao longo do tempo", text_alignment='center')
-
-col_a = st.selectbox("Selecione a métrica a ser comparada:", df.columns)
-
-fig_lin = linha(
-    lista_dados=list(analises.values()), 
-    x="Trimestre", 
-    y=col_a, 
-    lista_empresas=empresas
 )
 
-st.plotly_chart(fig_lin, use_container_width=True)
+
+def grafico(fig):
+    st.plotly_chart(fig, config=CONFIG)
 
 
-@st.cache_data(ttl=60 * 60 * 24, show_spinner="Buscando notícias, pode levar alguns instantes...")
-def obter_contexto(empresa, coluna, df_coluna):
-    nome_busca = "Petz Cobasi" if empresa == "Fusão" else empresa
-    return contexto_para_llm(df_coluna, nome_busca, top=3, retornar_fontes=True)
+abas = st.tabs(["Resumo", "Crescimento", "Margens", "Capital de giro", "Expansão", "Sobreposição", "Caixa e dívida"])
 
+# ============================================================== RESUMO
+with abas[0]:
+    if not base["depois"]:
+        st.info("Ainda não há trimestres publicados depois da fusão na planilha carregada.")
+    else:
+        txt_antes = " e ".join(rotulo_trimestre(p) for p in base["antes"])
+        txt_depois = " e ".join(rotulo_trimestre(p) for p in base["depois"])
+        st.subheader("Antes × depois")
+        st.markdown(f'<p class="pc-nota">Grupo combinado em <b>{txt_depois}</b> contra o pro forma de <b>{txt_antes}</b>: '
+                    "os mesmos trimestres um ano antes. Margens calculadas sobre as somas dos trimestres.</p>",
+                    unsafe_allow_html=True)
+        quadro(base["comparacao"].to_dict("records"),
+               [("Antes", "antes", "antes"), ("Depois", "depois", "depois"), ("Variação", "delta", "delta")])
+        legenda_limiares()
 
-@st.cache_data(ttl=60 * 60 * 24, show_spinner="Gerando explicação...")
-def obter_explicacao(empresa, coluna, contexto):
-    return explicar_variacoes(empresa, coluna, contexto)
+        st.subheader("Contra a tendência")
+        st.markdown('<p class="pc-nota">Ajustamos a tendência e a sazonalidade de 1T23 a 4T25 e projetamos o período '
+                    "pós-fusão como se ela não tivesse acontecido. A diferença entre o real e o projetado é o efeito "
+                    "estimado (média dos trimestres pós-fusão).</p>", unsafe_allow_html=True)
+        quadro(base["resumo_tendencia"].to_dict("records"),
+               [("Tendência", "tendencia", "antes"), ("Real", "real", "depois"), ("Diferença", "diferenca", "delta")])
 
+        st.subheader("O que os números sugerem")
+        leitura(base["comparacao"])
+        st.markdown("**Cuidados na interpretação**")
+        cuidados()
 
-st.subheader("Por que a métrica variou?", text_alignment='center')
-st.caption("Explicação gerada por IA a partir de notícias do período. Confira as fontes na aba ao lado.")
+# ============================================================== CRESCIMENTO
+with abas[1]:
+    grafico(grafico_barras(ind, [("receita_bruta_petz", "Petz", "Petz"), ("receita_bruta_cobasi", "Cobasi", "Cobasi")],
+                           "mi", "Receita bruta por bandeira (R$ milhões)", altura=400))
+    st.caption("As duas marcas continuam operando separadas depois da fusão.")
+    c1, c2 = st.columns(2)
+    with c1:
+        grafico(grafico_linhas(ind, [("cresc_petz", "Petz", "Petz"), ("cresc_cobasi", "Cobasi", "Cobasi")], "pct",
+                               "Crescimento da receita bruta sobre o ano anterior"))
+    with c2:
+        grafico(grafico_linhas(ind, [("sss_petz", "Petz", "Petz"), ("sss_cobasi", "Cobasi", "Cobasi"),
+                                     ("sss_consolidado", "Consolidado", "Grupo")], "pct", "Vendas mesmas lojas (SSS)"))
+    c1, c2 = st.columns(2)
+    with c1:
+        grafico(grafico_linhas(ind, [("receita_m2_petz", "Petz", "Petz"), ("receita_m2_cobasi", "Cobasi", "Cobasi")], "m2",
+                               "Receita bruta por m² de loja (R$ no trimestre)"))
+        st.caption("Inclui as vendas digitais atribuídas a cada bandeira.")
+    with c2:
+        grafico(grafico_linhas(ind, [("penetracao_digital", "Penetração digital", "Grupo")], "pct",
+                               "Penetração digital (% da receita bruta)"))
 
-for empresa, df_emp in analises.items():
-    with st.expander(f"{empresa} — {col_a}"):
-        try:
-            contexto, fontes = obter_contexto(empresa, col_a, df_emp[[col_a]])
-            explicacao = obter_explicacao(empresa, col_a, contexto)
-        except Exception as e:
-            st.error(f"Não foi possível gerar a explicação agora: {e}")
-            continue
+# ============================================================== MARGENS
+METRICAS = {
+    "Margem bruta": ("margem_bruta", "Lucro bruto ÷ receita líquida. Sobe quando o preço de venda aumenta ou o custo de compra cai."),
+    "Margem EBITDA": ("margem_ebitda", "EBITDA ajustado ÷ receita líquida. Exclui itens não recorrentes, como os custos da fusão."),
+    "Despesas com vendas": ("despesas_vendas_pct", "Despesas com vendas ÷ receita líquida. Inclui pessoal de loja, aluguel (IAS17), frete e marketing."),
+    "Despesas G&A": ("despesas_ga_pct", "Despesas gerais e administrativas ÷ receita líquida. Sede e áreas de apoio."),
+    "Margem líquida": ("margem_liquida", "Lucro líquido ÷ receita líquida. Afetada por itens não recorrentes e pelo resultado financeiro."),
+}
+with abas[2]:
+    c1, c2 = st.columns([3, 1])
+    escolha = c1.segmented_control("Indicador", list(METRICAS), default="Margem bruta", key="metrica_margem") or "Margem bruta"
+    coluna, explicacao = METRICAS[escolha]
+    com_tendencia = c2.toggle("Tendência sem fusão", value=True, disabled=coluna not in tend)
+    grafico(grafico_linhas(ind, [(coluna, "Real", "Grupo")], "pct", escolha,
+                           tendencia=tend.get(coluna) if com_tendencia else None, altura=420))
+    st.caption(explicacao + (" A linha pontilhada é a tendência de 2023–2025 projetada sem a fusão."
+                             if com_tendencia and coluna in tend else ""))
 
-        aba_exp, aba_not = st.tabs(["Explicação", "Notícias usadas"])
-        aba_exp.markdown(linkar_fontes(explicacao, fontes))
-        aba_not.markdown(contexto)
+# ============================================================== CAPITAL DE GIRO
+with abas[3]:
+    grafico(grafico_linhas(ind, [("prazo_fornecedores", "Real", "Grupo")], "dias",
+                           "Prazo com fornecedores: real × tendência", tendencia=tend.get("prazo_fornecedores"), altura=400))
+    st.caption("Fornecedores no balanço ÷ CMV do trimestre × 91 dias. O quanto o real fica acima da linha pontilhada "
+               "é o ganho de prazo atribuível ao período pós-fusão.")
+    c1, c2 = st.columns(2)
+    with c1:
+        grafico(grafico_linhas(ind, [("prazo_fornecedores", "Fornecedores", "Grupo"), ("prazo_estoques", "Estoque", 0),
+                                     ("prazo_recebimento", "Recebimento", 1)], "dias", "Prazos médios"))
+        st.caption("Estoque e fornecedores sobre o CMV; recebimento sobre a receita bruta.")
+    with c2:
+        grafico(grafico_linhas(ind, [("ciclo_caixa", "Ciclo de caixa", "Grupo")], "dias", "Ciclo de caixa"))
+        st.caption("Estoque + recebimento − fornecedores. Quanto menor, menos capital o grupo precisa para girar o negócio.")
+
+# ============================================================== EXPANSÃO
+with abas[4]:
+    anual = base["anual"]
+    st.subheader("O ritmo de abertura de lojas caiu")
+    st.markdown('<p class="pc-nota">Com a fusão em análise, as duas redes praticamente pararam de abrir lojas. Menos '
+                "disputa por novos pontos também é uma forma de reduzir a concorrência.</p>", unsafe_allow_html=True)
+    itens = []
+    for ano in ("2023", "2025"):
+        if ano in anual.index:
+            itens.append((fmt_int(anual.loc[ano, "inauguracoes"]), f"inaugurações em {ano}"))
+    for ano in ("2023", "2025"):
+        if ano in anual.index:
+            itens.append((fmt_reais_mi(anual.loc[ano, "capex_lojas_novas"]), f"investidos em lojas novas em {ano}"))
+    destaques(itens)
+    c1, c2 = st.columns(2)
+    with c1:
+        grafico(grafico_barras(ind, [("inauguracoes_petz", "Petz", "Petz"), ("inauguracoes_cobasi", "Cobasi", "Cobasi")],
+                               "int", "Inaugurações por trimestre"))
+    with c2:
+        grafico(grafico_barras(ind, [("capex_lojas_novas", "Lojas novas e hospitais", 0), ("capex_reformas", "Reformas e manutenção", 1),
+                                     ("capex_tecnologia", "Tecnologia e digital", 2)], "mi", "CAPEX por tipo (R$ milhões)"))
+    grafico(grafico_barras(ind, [("lojas_petz", "Petz", "Petz"), ("lojas_cobasi", "Cobasi", "Cobasi")], "int", "Número de lojas"))
+
+# ============================================================== SOBREPOSIÇÃO
+with abas[5]:
+    s, cidades = base["sobreposicao"], base["cidades"]
+    st.subheader("Onde as duas redes competiam")
+    st.markdown('<p class="pc-nota">Poder de mercado no varejo é local: o cliente compara as lojas perto de casa. Por '
+                "isso o Cade olhou cidade a cidade e exigiu a venda de lojas em São Paulo.</p>", unsafe_allow_html=True)
+    if not s:
+        st.info("A planilha carregada não tem a aba Lista de Lojas no formato esperado, então esta análise "
+                "não está disponível. Veja Dados e método > Contas da planilha.")
+    else:
+        destaques([
+            (fmt_int(s["cidades_ambas"]), f"cidades com Petz e Cobasi, de {fmt_int(s['cidades_total'])} com lojas do grupo"),
+            (fmt_int(s["lojas_em_cidades_ambas"]), f"lojas nessas cidades, de {fmt_int(s['lojas_total'])} no total"),
+            (fmt_pct(s["participacao"], 0), "das lojas estão em cidades onde as duas bandeiras disputavam clientes"),
+        ])
+        c1, c2 = st.columns([3, 2])
+        with c1:
+            st.markdown("**As 15 cidades com mais lojas das duas bandeiras**")
+            grafico(grafico_cidades(cidades))
+        with c2:
+            st.markdown("**Todas as cidades com as duas bandeiras**")
+            st.dataframe(
+                cidades[["cidade", "petz", "cobasi", "total"]], hide_index=True, height=480, width="stretch",
+                column_config={"cidade": "Cidade", "petz": st.column_config.NumberColumn("Petz", format="%d"),
+                               "cobasi": st.column_config.NumberColumn("Cobasi", format="%d"),
+                               "total": st.column_config.NumberColumn("Total", format="%d")},
+            )
+
+# ============================================================== CAIXA E DÍVIDA
+with abas[6]:
+    grafico(grafico_linhas(ind, [("caixa_total", "Caixa total", "Grupo"), ("divida_bruta", "Dívida bruta", 1)], "mi",
+                           "Caixa total e dívida bruta (R$ milhões)", altura=400))
+    st.caption("O grupo tem mais caixa (incluindo aplicações financeiras) do que dívida em todo o período. A queda do "
+               "caixa no 1T26 coincide com a saída de recursos ligada à combinação de negócios.")
+    grafico(grafico_barras(ind, [("fluxo_caixa_operacional", "Fluxo de caixa operacional", "Grupo")], "mi",
+                           "Fluxo de caixa operacional (R$ milhões)"))

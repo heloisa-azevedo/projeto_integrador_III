@@ -63,16 +63,18 @@ async def lancar_navegador(p):
 
 
 # 2. MOTOR DE DOWNLOAD (CAPTURA AS PLANILHAS DIRETAMENTE DO SITE)
-async def extrair_planilhas_por_ano():
-    url_site = "https://ri.petzcobasi.com.br/informacoes-financeiras/planilha-interativa/"
+URL_SITE = "https://ri.petzcobasi.com.br/informacoes-financeiras/planilha-interativa/"
+
+
+async def encontrar_links_planilhas():
+    """Abre a página do RI, percorre os anos do seletor e devolve {empresa: url da planilha}."""
     alvos = ("Petz", "Cobasi", "Fusão")
     links_encontrados = {}
-    textos_vistos = set()  # diagnóstico: todos os links de planilha que o site expôs
 
     async with async_playwright() as p:
         browser = await lancar_navegador(p)
         page = await browser.new_page()
-        await page.goto(url_site, wait_until="networkidle")
+        await page.goto(URL_SITE, wait_until="networkidle")
 
         dropdown_contexto = page
         if not await page.locator("select#yearSelect").count():
@@ -100,20 +102,26 @@ async def extrair_planilhas_por_ano():
                     a for a in tabela.find_all("a", href=True)
                     if not a["href"].startswith(("#", "javascript"))
                 ]
-                for a in links:
-                    textos_vistos.add(f"{ano} | {tabela.get('id')} | {nome} | {a.get_text(strip=True)}")
                 if nome and nome not in links_encontrados and links:
-                    links_encontrados[nome] = urljoin(url_site, links[0]["href"])
+                    links_encontrados[nome] = urljoin(URL_SITE, links[0]["href"])
 
         await browser.close()
+    return links_encontrados
 
+
+def baixar_planilha(url_planilha):
+    """Baixa uma planilha e devolve os bytes do .xlsx."""
+    resposta = requests.get(url_planilha, headers={"User-Agent": "Mozilla/5.0"}, timeout=30)
+    resposta.raise_for_status()
+    return resposta.content
+
+
+async def extrair_planilhas_por_ano():
+    """Mantida por compatibilidade: devolve {empresa: {aba: DataFrame}}."""
     dados_empresas = {}
-    headers = {"User-Agent": "Mozilla/5.0"}
-    for empresa, url_planilha in links_encontrados.items():
+    for empresa, url_planilha in (await encontrar_links_planilhas()).items():
         try:
-            resposta = requests.get(url_planilha, headers=headers, timeout=30)
-            resposta.raise_for_status()
-            dados_empresas[empresa] = pd.read_excel(io.BytesIO(resposta.content), sheet_name=None)
+            dados_empresas[empresa] = pd.read_excel(io.BytesIO(baixar_planilha(url_planilha)), sheet_name=None)
         except Exception as e:
             print(f"Erro ao ler {empresa}: {e}")
     return dados_empresas
@@ -189,86 +197,185 @@ def limpar_planilha_universal(df_bruto, frequencia="trimestral"):
     return df_limpo[["Grupo_Pai", "Conta_PT", "Conta_EN"] + colunas_alvo_limpas]
 
 
-# 4. MOTOR DE ANÁLISE DOS 4 PILARES
-def montar_modelo_analitico_trimestral(dados_da_empresa):
-    dre = limpar_planilha_universal(dados_da_empresa.get("DRE (IAS17)"), "trimestral")
-    recon = limpar_planilha_universal(dados_da_empresa.get("Recon. EBITDA"), "trimestral")
-    bp = limpar_planilha_universal(dados_da_empresa.get("BP (IAS17)"), "trimestral")
-    dfc = limpar_planilha_universal(dados_da_empresa.get("DFC (IAS17)"), "trimestral")
-    ops = limpar_planilha_universal(dados_da_empresa.get("Dados Operacionais"), "trimestral")
+# 4. EXTRAÇÃO DAS CONTAS DA PLANILHA DO GRUPO
+# A planilha do Grupo Petz Cobasi tem uma única coluna de nomes, em português.
+# De 1T23 a 4T25 os trimestres são pro forma ("1T23 PF*"); depois, o grupo combinado.
+# Padrões começam com ^ para não confundir, por exemplo, "Lucro Líquido" com "Lucro Líquido Ajustado".
+# Formato: coluna destino -> (aba, padrão, ocorrência)
+CONTAS = {
+    "receita_bruta":           ("DRE (IAS17)", r"^Receita Bruta de Vendas", 0),
+    "receita_bruta_petz":      ("DRE (IAS17)", r"^Receita Bruta Petz", 0),
+    "receita_bruta_cobasi":    ("DRE (IAS17)", r"^Receita Bruta Cobasi", 0),
+    "receita_liquida":         ("DRE (IAS17)", r"^Receita L[ií]quida", 0),
+    "cmv":                     ("DRE (IAS17)", r"^Custo das Mercadorias", 0),
+    "lucro_bruto":             ("DRE (IAS17)", r"^Lucro Bruto", 0),
+    "despesas_vendas":         ("DRE (IAS17)", r"^Com Vendas", 0),
+    "despesas_ga":             ("DRE (IAS17)", r"^Gerais", 0),
+    "ebitda_ajustado":         ("DRE (IAS17)", r"^EBITDA Ajustado", 0),
+    "lucro_liquido":           ("DRE (IAS17)", r"^Lucro L[ií]quido do Exerc[ií]cio$", 0),
+    "caixa":                   ("BP (IAS17)", r"^Caixa e Equivalentes", 0),
+    "aplicacoes_cp":           ("BP (IAS17)", r"^Aplica[cç][oõ]es Financeiras", 0),
+    "aplicacoes_lp":           ("BP (IAS17)", r"^Aplica[cç][oõ]es Financeiras", 1),
+    "contas_receber":          ("BP (IAS17)", r"^Contas a Receber", 0),
+    "estoques":                ("BP (IAS17)", r"^Estoques", 0),
+    "fornecedores":            ("BP (IAS17)", r"^Fornecedores$", 0),
+    "emprestimos_cp":          ("BP (IAS17)", r"^Empr[eé]stimos", 0),
+    "emprestimos_lp":          ("BP (IAS17)", r"^Empr[eé]stimos", 1),
+    "fluxo_caixa_operacional": ("DFC (IAS17)", r"^Fluxo de Caixa Operacional", 0),
+    "lojas_petz":              ("Dados Operacionais", r"^N[uú]mero de Lojas Petz", 0),
+    "lojas_cobasi":            ("Dados Operacionais", r"^N[uú]mero de Lojas Cobasi", 0),
+    "inauguracoes_petz":       ("Dados Operacionais", r"^N[uú]mero de Inaugura[cç][oõ]es Petz", 0),
+    "inauguracoes_cobasi":     ("Dados Operacionais", r"^N[uú]mero de Inaugura[cç][oõ]es Cobasi", 0),
+    "area_petz_m2":            ("Dados Operacionais", r"^[ÁA]rea de Lojas Petz", 0),
+    "area_cobasi_m2":          ("Dados Operacionais", r"^[ÁA]rea de Lojas Cobasi", 0),
+    "sss_petz":                ("Dados Operacionais", r"^Same Store Sales.*Petz", 0),
+    "sss_cobasi":              ("Dados Operacionais", r"^Same Store Sales.*Cobasi", 0),
+    "sss_consolidado":         ("Dados Operacionais", r"^Same Store Sales.*Consolidado", 0),
+    "penetracao_digital":      ("Dados Operacionais", r"^Penetra[cç][aã]o Digital", 0),
+    "capex_lojas_novas":       ("Investimentos | CAPEX", r"^Novas Lojas", 0),
+    "capex_reformas":          ("Investimentos | CAPEX", r"^Reformas", 0),
+    "capex_tecnologia":        ("Investimentos | CAPEX", r"^Tecnologia", 0),
+    "capex_total":             ("Investimentos | CAPEX", r"^Investimentos Totais", 0),
+}
 
-    def pescar_valores(df, termo_busca_en, regex=False, ocorrencia=0):
-        if df is None or "Conta_EN" not in df.columns:
-            return pd.Series(dtype=float)
-        linha = df[df["Conta_EN"].str.contains(termo_busca_en, case=False, na=False, regex=regex)]
-        if not linha.empty and len(linha) > ocorrencia:
-            colunas_datas = [c for c in df.columns if c not in ["Grupo_Pai", "Conta_PT", "Conta_EN"]]
-            return pd.to_numeric(linha.iloc[ocorrencia][colunas_datas], errors="coerce").fillna(0)
+COLUNAS_META = ["Grupo_Pai", "Conta_PT", "Conta_EN"]
+TRIMESTRE_FUSAO = pd.Period("2026Q1", freq="Q")
+
+
+def trimestre_para_periodo(rotulo):
+    """'1T24' -> Period('2024Q1'). Texto não ordena trimestres corretamente."""
+    rotulo = str(rotulo).strip()
+    return pd.Period(f"20{rotulo[2:4]}Q{rotulo[0]}", freq="Q")
+
+
+def pescar_valores(df, padrao, ocorrencia=0):
+    """Devolve a linha da conta como série numérica indexada por trimestre.
+    Valores ausentes ficam NaN (antes viravam 0 e criavam quedas falsas nos gráficos)."""
+    if df is None:
         return pd.Series(dtype=float)
+    nomes = df["Conta_PT"].astype(str).str.replace("\xa0", " ").str.strip()
+    linhas = df[nomes.str.contains(padrao, case=False, na=False, regex=True)]
+    if len(linhas) <= ocorrencia:
+        return pd.Series(dtype=float)
+    colunas_datas = [c for c in df.columns if c not in COLUNAS_META]
+    serie = pd.to_numeric(linhas.iloc[ocorrencia][colunas_datas], errors="coerce")
+    serie.index = [trimestre_para_periodo(c) for c in serie.index]
+    return serie[~serie.index.duplicated()]
 
-    analise = pd.DataFrame()
-    analise["Receita_Bruta"] = pescar_valores(dre, "Gross Revenue")
-    analise["Receita_Liquida"] = pescar_valores(dre, "Net Revenue|Net Sales", regex=True)
-    analise["EBITDA_Ajustado"] = pescar_valores(recon, "Adjusted EBITDA")
-    analise["Lucro_Liquido"] = pescar_valores(dre, "Net Income")
 
-    analise["Caixa_Equivalentes"] = pescar_valores(bp, "Cash and Cash Equivalents")
-    analise["Aplicacoes_Financeiras"] = pescar_valores(bp, "Investments")
-    analise["Emprestimos_CP"] = pescar_valores(bp, "Loans, Financing", ocorrencia=0)
-    analise["Emprestimos_LP"] = pescar_valores(bp, "Loans, Financing", ocorrencia=-1)
-    analise["Estoques"] = pescar_valores(bp, "Inventor")
+def montar_trimestral(abas):
+    """Recebe {aba: DataFrame} da planilha do grupo e devolve uma tabela por trimestre
+    com as contas brutas (R$ mil) e a lista de contas que não foram encontradas."""
+    limpas = {}
+    colunas, ausentes = {}, []
+    for destino, (aba, padrao, ocorrencia) in CONTAS.items():
+        if aba not in limpas:
+            limpas[aba] = limpar_planilha_universal(abas.get(aba), "trimestral")
+        serie = pescar_valores(limpas[aba], padrao, ocorrencia)
+        if serie.dropna().empty:
+            ausentes.append(f"{destino} ({aba})")
+        colunas[destino] = serie
+    # pd.DataFrame(dict) une os índices de todas as séries
+    tabela = pd.DataFrame(colunas).sort_index().dropna(how="all")
+    tabela.index.name = "Trimestre"
+    tabela.insert(0, "pro_forma", tabela.index < TRIMESTRE_FUSAO)
+    return tabela, ausentes
 
-    analise["Fluxo_Caixa_Operacional"] = pescar_valores(dfc, "Operating Activities")
 
-    analise["SSS_Percentual"] = pescar_valores(ops, "Same Store Sales")
-    analise["Penetracao_Digital"] = pescar_valores(ops, "Digital Penetration")
+# Nome normalizado da coluna na planilha -> nome usado no app
+COLUNAS_LOJAS = {
+    "bandeira": "bandeira", "marca": "bandeira", "loja": "codigo", "codigo": "codigo", "nome da loja": "nome",
+    "inauguracao": "inauguracao", "data de inauguracao": "inauguracao", "trim. inaug.": "trimestre_inauguracao",
+    "area (m2)": "area_m2", "area (m²)": "area_m2", "area": "area_m2", "cidade": "cidade", "municipio": "cidade",
+    "uf": "uf", "estado": "uf", "regiao": "regiao",
+}
 
-    analise["Margem_EBITDA"] = (analise["EBITDA_Ajustado"] / analise["Receita_Liquida"]).fillna(0)
-    analise["Divida_Bruta"] = analise["Emprestimos_CP"] + analise["Emprestimos_LP"]
-    analise["Caixa_Total"] = analise["Caixa_Equivalentes"] + analise["Aplicacoes_Financeiras"]
-    analise["Divida_Liquida"] = analise["Divida_Bruta"] - analise["Caixa_Total"]
 
-    return analise.dropna(how="all").rename_axis("Trimestre")
+def _aba(abas, nome):
+    """Encontra a aba ignorando maiúsculas, acentos e espaços nas pontas."""
+    alvo = normalizar(nome).strip()
+    for chave, df in abas.items():
+        if normalizar(str(chave)).strip() == alvo:
+            return df
+    return None
+
+
+def montar_lojas(abas):
+    """Aba 'Lista de Lojas': uma linha por loja (sem endereço).
+    Tolera cabeçalho fora da primeira linha e variações nos nomes das colunas.
+    Se a aba não existir ou não tiver bandeira e cidade, devolve uma tabela vazia
+    (a análise de sobreposição fica indisponível, o resto do app funciona)."""
+    vazia = pd.DataFrame(columns=["bandeira", "cidade", "uf"])
+    bruto = _aba(abas, "Lista de Lojas")
+    if bruto is None or bruto.empty:
+        return vazia
+
+    # o cabeçalho pode não estar na 1ª linha: procura a linha que tem "Bandeira" e "Cidade"
+    tabela = pd.concat([bruto.columns.to_frame().T.set_axis(bruto.columns, axis=1), bruto], ignore_index=True)
+    linha_cab = None
+    for i, linha in tabela.head(15).iterrows():
+        nomes = {normalizar(str(v)).strip() for v in linha if pd.notna(v)}
+        if {"bandeira", "cidade"} <= nomes or {"marca", "cidade"} <= nomes:
+            linha_cab = i
+            break
+    if linha_cab is None:
+        return vazia
+
+    cabecalho = [COLUNAS_LOJAS.get(normalizar(str(v)).strip(), normalizar(str(v)).strip()) for v in tabela.iloc[linha_cab]]
+    lojas = tabela.iloc[linha_cab + 1:].copy()
+    lojas.columns = cabecalho
+    lojas = lojas.loc[:, ~lojas.columns.duplicated()]
+    lojas = lojas.dropna(subset=["bandeira", "cidade"])
+    lojas["bandeira"] = lojas["bandeira"].astype(str).str.strip()
+    lojas["cidade"] = lojas["cidade"].astype(str).str.strip()
+    lojas["uf"] = lojas["uf"].astype(str).str.strip().str.upper() if "uf" in lojas.columns else ""
+    if "codigo" in lojas.columns:  # mistura números (Cobasi) e textos (Petz)
+        lojas["codigo"] = lojas["codigo"].astype(str)
+    if "inauguracao" in lojas.columns:
+        lojas["inauguracao"] = pd.to_datetime(lojas["inauguracao"], errors="coerce").dt.date
+    if "area_m2" in lojas.columns:
+        lojas["area_m2"] = pd.to_numeric(lojas["area_m2"], errors="coerce")
+    colunas = [c for c in ["bandeira", "codigo", "nome", "inauguracao", "trimestre_inauguracao", "area_m2", "cidade", "uf", "regiao"]
+               if c in lojas.columns]
+    return lojas[colunas].reset_index(drop=True)
+
+
+def ler_planilha_grupo(origem):
+    """origem: caminho do .xlsx, bytes ou arquivo enviado pelo Streamlit."""
+    if isinstance(origem, (bytes, bytearray)):
+        origem = io.BytesIO(origem)
+    abas = pd.read_excel(origem, sheet_name=None)
+    trimestral, ausentes = montar_trimestral(abas)
+    lojas = montar_lojas(abas)
+    if lojas.empty:
+        ausentes.append("lista de lojas (aba Lista de Lojas)")
+    return {"trimestral": trimestral, "lojas": lojas, "ausentes": ausentes}
 
 
 # 5. EXECUÇÃO MESTRE
-async def main():
-    print("1/2 Iniciando extração dos dados direto do RI...")
-    dados_gerais = await extrair_planilhas_por_ano()
-
-    faltando = [e for e in ("Petz", "Cobasi", "Fusão") if e not in dados_gerais]
-    if faltando:
-        print(f"Planilhas não carregadas: {faltando}. Seguindo com: {list(dados_gerais)}")
-    if not dados_gerais:
-        raise RuntimeError("Nenhuma planilha foi carregada.")
-
-    print("2/2 Construindo modelos analíticos (IFRS/IAS17)...")
-    analises = {
-        nome: montar_modelo_analitico_trimestral(dados)
-        for nome, dados in dados_gerais.items()
-    }
-
-    return analises
+async def baixar_planilha_grupo():
+    """Encontra no RI a planilha do grupo combinado e devolve seus bytes."""
+    links = await encontrar_links_planilhas()
+    if "Fusão" not in links:
+        raise RuntimeError(f"Planilha do grupo não encontrada no RI. Links achados: {list(links)}")
+    return baixar_planilha(links["Fusão"])
 
 
-def carregar_analises():
-    """
-    Versão síncrona para usar em outros módulos.
-    O cache fica por conta do st.cache_data (em analyse.py), então aqui
-    o scraping roda toda vez que a função é chamada.
-    """
+def carregar_planilha_do_ri():
+    """Versão síncrona para usar em outros módulos (o Streamlit não roda async diretamente)."""
     try:
         asyncio.get_running_loop()
     except RuntimeError:
-        return asyncio.run(main())
+        return asyncio.run(baixar_planilha_grupo())
     else:
         # Já existe um loop rodando (Jupyter / Interactive Window do VS Code):
         # roda em outra thread, que tem o próprio loop.
         from concurrent.futures import ThreadPoolExecutor
 
         with ThreadPoolExecutor(max_workers=1) as executor:
-            return executor.submit(lambda: asyncio.run(main())).result()
+            return executor.submit(lambda: asyncio.run(baixar_planilha_grupo())).result()
 
 
 if __name__ == "__main__":
-    carregar_analises()
+    dados = ler_planilha_grupo(carregar_planilha_do_ri())
+    print(dados["trimestral"].tail())
