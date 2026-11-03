@@ -100,9 +100,9 @@ _MEDIDAS = {
 
 
 def periodos_comparacao(df, inicio=TRIMESTRE_FUSAO):
-    """'Depois' = trimestres publicados desde a fusão.
-    'Antes' = os MESMOS trimestres um ano antes (neutraliza a sazonalidade)."""
-    depois = [p for p in df.index if p >= inicio and pd.notna(df.loc[p, "receita_liquida"])]
+    """'Depois' = o primeiro ano após a fusão (até 4 trimestres publicados).
+    'Antes' = os mesmos trimestres um ano antes, todos anteriores à fusão."""
+    depois = [p for p in df.index if inicio <= p < inicio + 4 and pd.notna(df.loc[p, "receita_liquida"])]
     antes = [p - 4 for p in depois if (p - 4) in df.index]
     return antes, depois
 
