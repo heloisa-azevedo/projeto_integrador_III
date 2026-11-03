@@ -26,4 +26,4 @@ paginas = [
 ]
 st.navigation(paginas).run()
 
-# python -m streamlit run app.py
+# Para rodar: python -m streamlit run app.py

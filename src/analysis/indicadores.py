@@ -101,7 +101,8 @@ _MEDIDAS = {
 
 def periodos_comparacao(df, inicio=TRIMESTRE_FUSAO):
     """'Depois' = o primeiro ano após a fusão (até 4 trimestres publicados).
-    'Antes' = os mesmos trimestres um ano antes, todos anteriores à fusão."""
+    'Antes' = os MESMOS trimestres um ano antes, todos anteriores à fusão (neutraliza a sazonalidade).
+    Limitar ao primeiro ano evita que, a partir de 2027, o 'antes' caia em trimestres já pós-fusão."""
     depois = [p for p in df.index if inicio <= p < inicio + 4 and pd.notna(df.loc[p, "receita_liquida"])]
     antes = [p - 4 for p in depois if (p - 4) in df.index]
     return antes, depois
@@ -209,15 +210,62 @@ def sobreposicao_resumo(lojas):
 def leitura_hipotese(comparacao):
     """Classifica cada mecanismo. É uma leitura de apoio: a conclusão final
     deve ser escrita pelo grupo, com as limitações."""
-    def sinal(valor, limiar):
-        if pd.isna(valor):
-            return None
-        return 1 if valor > limiar else -1 if valor < -limiar else 0
-
     despesas = comparacao.loc["despesas_vendas", "delta"] + comparacao.loc["despesas_ga", "delta"]
     s_desp = sinal(despesas, LIMIAR_PP)
+    # (sinal() está definida no fim do arquivo)
     return {
         "preco_ou_compra": sinal(comparacao.loc["margem_bruta", "delta"], LIMIAR_PP),
         "fornecedores": sinal(comparacao.loc["prazo_fornecedores", "delta"], LIMIAR_DIAS),
         "sinergia": None if s_desp is None else -s_desp,
     }
+
+
+# ---------------------------------------------------------------- textos montados a partir dos dados
+def rotulo_periodo(trimestres):
+    """[1T26, 2T26] -> '1º semestre de 2026'; [1T26..3T26] -> 'nove primeiros meses de 2026'; etc."""
+    if not trimestres:
+        return ""
+    anos = {p.year for p in trimestres}
+    quarters = sorted(p.quarter for p in trimestres)
+    if len(anos) == 1 and quarters == list(range(1, len(quarters) + 1)):
+        ano = anos.pop()
+        return {1: f"1º trimestre de {ano}", 2: f"1º semestre de {ano}",
+                3: f"nove primeiros meses de {ano}", 4: f"ano de {ano}"}[len(quarters)]
+    return f"{rotulo_trimestre(min(trimestres))} a {rotulo_trimestre(max(trimestres))}"
+
+
+def faixas_do_periodo(df, inicio=TRIMESTRE_FUSAO):
+    """Textos sobre os períodos presentes nos dados (para não deixar trimestres escritos à mão)."""
+    pre = [p for p in df.index if p < inicio]
+    pos = [p for p in df.index if p >= inicio]
+    junta = lambda ps: " e ".join(rotulo_trimestre(p) for p in ps) if len(ps) <= 2 else \
+        f"{rotulo_trimestre(ps[0])} a {rotulo_trimestre(ps[-1])}"
+    return {
+        "pre": f"{rotulo_trimestre(pre[0])} a {rotulo_trimestre(pre[-1])}" if pre else "",
+        "pre_anos": f"{pre[0].year}–{pre[-1].year}" if pre else "",
+        "pos": junta(pos),
+        "n_pos": len(pos),
+        "n_total": len(df.index),
+        "ultimo": rotulo_trimestre(df.index.max()),
+    }
+
+
+def sinal(valor, limiar):
+    if valor is None or pd.isna(valor):
+        return None
+    return 1 if valor > limiar else -1 if valor < -limiar else 0
+
+
+def anos_completos(df):
+    """Anos com os 4 trimestres na planilha."""
+    contagem = pd.Series([p.year for p in df.index]).value_counts()
+    return sorted(int(a) for a, n in contagem.items() if n == 4)
+
+
+def prazo_ja_alto_antes(df, depois, limiar=LIMIAR_DIAS, inicio=TRIMESTRE_FUSAO):
+    """True se os dois trimestres logo antes da fusão já tinham prazo com fornecedores
+    no nível do pós-fusão: nesse caso, o aumento pode não ser efeito da fusão."""
+    ultimos_pre = [p for p in df.index if p < inicio][-2:]
+    if not ultimos_pre or not depois:
+        return False
+    return df.loc[ultimos_pre, "prazo_fornecedores"].mean() >= df.loc[depois, "prazo_fornecedores"].mean() - limiar

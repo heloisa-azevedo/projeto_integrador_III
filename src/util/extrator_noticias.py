@@ -338,3 +338,35 @@ def contexto_para_llm(serie, empresa: str, nome: str, formatar=str, tipo: str = 
         detalhes.append({**v, "frase": frase, "pro_forma": pro_forma, "noticias": usadas, "erro": erro})
 
     return "\n\n".join(blocos), fontes, detalhes
+
+
+# ---------------------------------------------------------------------------
+# Contexto do parágrafo de interpretação (Resumo): números do app + notícias pós-fusão
+# ---------------------------------------------------------------------------
+def contexto_para_resumo(linhas_numeros, data_ini: date, data_fim: date, empresa: str = "Petz Cobasi",
+                         termo_busca: str = "resultado trimestre fusão sinergia", limite: int = 5,
+                         portal: str = "google", max_chars: int = 2500):
+    """linhas_numeros: frases prontas com os números (montadas pelo app, no formato brasileiro).
+    Retorna (texto, fontes, noticias, erro)."""
+    erro = None
+    try:
+        noticias = buscar_noticias(empresa, portal=portal, limite=limite, termo=termo_busca,
+                                   data_ini=data_ini, data_fim=data_fim, max_chars=max_chars)
+    except Exception as e:
+        noticias, erro = [], str(e)
+
+    blocos = ["NÚMEROS", *[f"- {linha}" for linha in linhas_numeros], "", "NOTÍCIAS"]
+    fontes, usadas = {}, []
+    if erro:
+        blocos.append(f"(erro na busca de notícias: {erro})")
+    elif not noticias:
+        blocos.append("Nenhuma notícia sobre Petz ou Cobasi encontrada para o período.")
+    for n in noticias:
+        codigo = f"F{len(fontes) + 1}"
+        fontes[codigo] = {"titulo": n["titulo"], "link": n["link"]}
+        situacao = "texto lido" if n["tem_texto"] else "só o título (texto indisponível)"
+        blocos.append(f"[{codigo}] {n['titulo']} ({n.get('data') or 's/ data'}, {dominio(n['link'])}; {situacao})")
+        if n["tem_texto"]:
+            blocos.append(n["texto"])
+        usadas.append({**n, "codigo": codigo, "dominio": dominio(n["link"])})
+    return "\n".join(blocos), fontes, usadas, erro

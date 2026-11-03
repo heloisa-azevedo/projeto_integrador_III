@@ -2,13 +2,14 @@
 import pandas as pd
 import streamlit as st
 
-from src.analysis.indicadores import DIAS_TRIMESTRE, LIMIAR_DIAS, LIMIAR_PP, rotulo_trimestre
+from src.analysis.indicadores import DIAS_TRIMESTRE, LIMIAR_DIAS, LIMIAR_PP, faixas_do_periodo, rotulo_trimestre
 from src.util.componentes import barra_lateral_dados, exigir_base
 from src.util.graficos import correlacao, info
 
 barra_lateral_dados()
 base, caminho = exigir_base()
 ind = base["indicadores"]
+faixas = faixas_do_periodo(ind)
 
 st.title("Dados e método")
 
@@ -18,9 +19,9 @@ st.markdown(
 Todos os números vêm da **Planilha Interativa** publicada no site de Relações com Investidores do Grupo Petz Cobasi
 (origem: {caminho}). As contas estão em R$ mil e foram convertidas para R$ milhões nos gráficos.
 
-- **De 1T23 a 4T25** os trimestres são **pro forma**: a companhia recalculou o histórico como se Petz e Cobasi já fossem
+- **De {faixas['pre']}** os trimestres são **pro forma**: a companhia recalculou o histórico como se Petz e Cobasi já fossem
   uma só empresa. Isso permite comparar negócios do mesmo tamanho antes e depois da fusão.
-- **1T26 e 2T26** são os números do grupo combinado, após a conclusão da fusão em 2 de janeiro de 2026.
+- **{faixas['pos']}** {'é o número' if faixas['n_pos'] == 1 else 'são os números'} do grupo combinado, após a conclusão da fusão em 2 de janeiro de 2026.
 - Petz e Cobasi aparecem separadas apenas na receita bruta e nos dados operacionais (lojas, inaugurações, área e SSS).
 """
 )
@@ -51,10 +52,10 @@ st.dataframe(formulas, hide_index=True, width="stretch")
 st.subheader("Comparações")
 st.markdown(
     f"""
-- **Antes × depois:** cada trimestre pós-fusão é comparado com o mesmo trimestre do ano anterior, o que neutraliza a
-  sazonalidade do varejo. Margens são calculadas sobre a soma das contas do período, e não pela média das margens.
+- **Antes × depois:** cada trimestre do primeiro ano pós-fusão é comparado com o mesmo trimestre do ano anterior, o que
+  neutraliza a sazonalidade do varejo e garante que o "antes" seja sempre anterior à fusão. Margens são calculadas sobre a soma das contas do período, e não pela média das margens.
 - **Contra a tendência:** para cada indicador, ajustamos por mínimos quadrados uma tendência linear com efeito de cada
-  trimestre do ano, usando só 1T23 a 4T25. A projeção para 2026 é o que se esperaria sem a fusão; a diferença para o
+  trimestre do ano, usando só {faixas['pre']}. A projeção para o período pós-fusão é o que se esperaria sem a fusão; a diferença para o
   real é o efeito estimado.
 - **Mudança relevante:** variações acima de {f'{LIMIAR_PP * 100:.1f}'.replace('.', ',')} ponto percentual nas margens ou de
   {LIMIAR_DIAS} dias nos prazos. Abaixo disso, tratamos como estabilidade.
@@ -129,7 +130,7 @@ with aba4:
     st.dataframe(contas_num.describe().T, width="stretch")
 
     st.markdown("**Correlação entre os indicadores**")
-    st.caption("Com só 14 trimestres e séries que crescem juntas, correlações altas podem ser coincidência. "
+    st.caption(f"Com só {faixas['n_total']} trimestres e séries que crescem juntas, correlações altas podem ser coincidência. "
                "Use este gráfico para explorar os dados, não como evidência para a hipótese.")
     colunas_corr = ["receita_liquida", "margem_bruta", "despesas_vendas_pct", "despesas_ga_pct", "margem_ebitda",
                     "prazo_fornecedores", "prazo_estoques", "sss_consolidado", "penetracao_digital", "capex_total"]

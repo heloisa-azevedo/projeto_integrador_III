@@ -2,6 +2,7 @@
 import streamlit as st
 
 from src.analysis.eventos import EVENTOS
+from src.analysis.indicadores import LIMIAR_PP, faixas_do_periodo, rotulo_periodo, sinal
 from src.util.componentes import barra_lateral_dados, destaques, obter_base
 from src.util.estilo import fmt_delta, fmt_pct
 
@@ -26,10 +27,19 @@ if base is not None and base["depois"]:
     c = base["comparacao"]
     s = base["sobreposicao"]
     st.subheader("Em resumo")
+    periodo = rotulo_periodo(base["depois"])
+    ano_antes = min(base["antes"]).year
+    # o que puxou a margem EBITDA: escolhido pelos números, não escrito à mão
+    s_bruta = sinal(c.loc["margem_bruta", "delta"], LIMIAR_PP)
+    s_desp = sinal(c.loc["despesas_vendas", "delta"] + c.loc["despesas_ga", "delta"], LIMIAR_PP)
+    motivos = (["pela margem bruta"] if s_bruta == 1 else []) + (["pela queda das despesas"] if s_desp == -1 else [])
+    rotulo_ebitda = "na margem EBITDA ajustada" + (", puxada " + " e ".join(motivos) if motivos else "")
+    rotulo_bruta = {1: "na margem bruta: em alta", 0: "na margem bruta: praticamente estável",
+                    -1: "na margem bruta: em queda", None: "na margem bruta"}[s_bruta]
     itens = [
-        (fmt_delta(c.loc["receita", "delta"], "reais"), "de receita líquida no 1º semestre de 2026 contra o mesmo período de 2025"),
-        (fmt_delta(c.loc["margem_ebitda", "delta"], "pct"), "na margem EBITDA ajustada, puxada pela queda das despesas"),
-        (fmt_delta(c.loc["margem_bruta", "delta"], "pct"), "na margem bruta: praticamente estável"),
+        (fmt_delta(c.loc["receita", "delta"], "reais"), f"de receita líquida no {periodo} contra o mesmo período de {ano_antes}"),
+        (fmt_delta(c.loc["margem_ebitda", "delta"], "pct"), rotulo_ebitda),
+        (fmt_delta(c.loc["margem_bruta", "delta"], "pct"), rotulo_bruta),
     ]
     if s:  # vazio se a planilha não trouxer a lista de lojas
         itens.append((fmt_pct(s["participacao"], 0), "das lojas ficam em cidades onde Petz e Cobasi disputavam clientes"))
@@ -81,9 +91,10 @@ st.markdown(
 )
 
 st.write("")
+anos_pre = faixas_do_periodo(base["indicadores"])["pre_anos"] if base is not None else "antes da fusão"
 st.markdown(
     '<p class="pc-nota">Cada trimestre pós-fusão é comparado com o mesmo trimestre do ano anterior, para evitar o '
-    "efeito das datas sazonais, e também com a tendência de 2023–2025 projetada como se não houvesse fusão.</p>",
+    f"efeito das datas sazonais, e também com a tendência de {anos_pre} projetada como se não houvesse fusão.</p>",
     unsafe_allow_html=True,
 )
 c1, c2 = st.columns(2)

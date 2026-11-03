@@ -2,8 +2,9 @@
 import pandas as pd
 import streamlit as st
 
-from src.analysis.indicadores import rotulo_trimestre
-from src.util.componentes import barra_lateral_dados, cuidados, destaques, exigir_base, leitura, legenda_limiares, quadro
+from src.analysis.indicadores import anos_completos, faixas_do_periodo, rotulo_trimestre
+from src.util.componentes import (barra_lateral_dados, cuidados, destaques, exigir_base, leitura, leitura_com_ia,
+                                  legenda_limiares, quadro)
 from src.util.estilo import fmt_int, fmt_pct, fmt_reais_mi
 from src.util.graficos import CONFIG, grafico_barras, grafico_cidades, grafico_linhas
 
@@ -11,11 +12,13 @@ barra_lateral_dados()
 base, _ = exigir_base()
 ind = base["indicadores"]
 tend = base["tendencias"]
+faixas = faixas_do_periodo(ind)
 
 st.title("Antes e depois da fusão")
 st.markdown(
-    '<p class="pc-lead">De 1T23 a 4T25 os números são pro forma da companhia, como se Petz e Cobasi já fossem uma só '
-    "empresa; 1T26 e 2T26 são o grupo combinado. A área sombreada dos gráficos marca o período pós-fusão.</p>",
+    f'<p class="pc-lead">De {faixas["pre"]} os números são pro forma da companhia, como se Petz e Cobasi já fossem uma só '
+    f"empresa; {faixas['pos']} {'é' if faixas['n_pos'] == 1 else 'são'} o grupo combinado. A área sombreada dos "
+    "gráficos marca o período pós-fusão.</p>",
     unsafe_allow_html=True,
 )
 
@@ -42,16 +45,19 @@ with abas[0]:
         legenda_limiares()
 
         st.subheader("Contra a tendência")
-        st.markdown('<p class="pc-nota">Ajustamos a tendência e a sazonalidade de 1T23 a 4T25 e projetamos o período '
+        st.markdown(f'<p class="pc-nota">Ajustamos a tendência e a sazonalidade de {faixas["pre"]} e projetamos o período '
                     "pós-fusão como se ela não tivesse acontecido. A diferença entre o real e o projetado é o efeito "
                     "estimado (média dos trimestres pós-fusão).</p>", unsafe_allow_html=True)
         quadro(base["resumo_tendencia"].to_dict("records"),
                [("Tendência", "tendencia", "antes"), ("Real", "real", "depois"), ("Diferença", "diferenca", "delta")])
 
         st.subheader("O que os números sugerem")
-        leitura(base["comparacao"])
-        st.markdown("**Cuidados na interpretação**")
-        cuidados()
+        leitura(base["comparacao"], ind, base["depois"])
+
+        leitura_com_ia(base, "leitura_ia_analise")
+
+        st.subheader("Cuidados na interpretação")
+        cuidados(base)
 
 # ============================================================== CRESCIMENTO
 with abas[1]:
@@ -89,7 +95,7 @@ with abas[2]:
     com_tendencia = c2.toggle("Tendência sem fusão", value=True, disabled=coluna not in tend)
     grafico(grafico_linhas(ind, [(coluna, "Real", "Grupo")], "pct", escolha,
                            tendencia=tend.get(coluna) if com_tendencia else None, altura=420))
-    st.caption(explicacao + (" A linha pontilhada é a tendência de 2023–2025 projetada sem a fusão."
+    st.caption(explicacao + (f" A linha pontilhada é a tendência de {faixas['pre_anos']} projetada sem a fusão."
                              if com_tendencia and coluna in tend else ""))
 
 # ============================================================== CAPITAL DE GIRO
@@ -110,17 +116,28 @@ with abas[3]:
 # ============================================================== EXPANSÃO
 with abas[4]:
     anual = base["anual"]
-    st.subheader("O ritmo de abertura de lojas caiu")
-    st.markdown('<p class="pc-nota">Com a fusão em análise, as duas redes praticamente pararam de abrir lojas. Menos '
-                "disputa por novos pontos também é uma forma de reduzir a concorrência.</p>", unsafe_allow_html=True)
-    itens = []
-    for ano in ("2023", "2025"):
-        if ano in anual.index:
-            itens.append((fmt_int(anual.loc[ano, "inauguracoes"]), f"inaugurações em {ano}"))
-    for ano in ("2023", "2025"):
-        if ano in anual.index:
-            itens.append((fmt_reais_mi(anual.loc[ano, "capex_lojas_novas"]), f"investidos em lojas novas em {ano}"))
-    destaques(itens)
+    completos = [str(a) for a in anos_completos(ind)]
+    if len(completos) >= 2:
+        primeiro, ultimo = completos[0], completos[-1]
+        ini, fim = anual.loc[primeiro, "inauguracoes"], anual.loc[ultimo, "inauguracoes"]
+        # título escolhido pelos números: queda/alta de mais de 30% entre o primeiro e o último ano completo
+        if fim < ini * 0.7:
+            st.subheader("O ritmo de abertura de lojas caiu")
+            st.markdown('<p class="pc-nota">Menos disputa por novos pontos também é uma forma de reduzir a '
+                        "concorrência: vale comparar o ritmo de inaugurações com o período de análise da fusão.</p>",
+                        unsafe_allow_html=True)
+        elif fim > ini * 1.3:
+            st.subheader("O ritmo de abertura de lojas acelerou")
+        else:
+            st.subheader("O ritmo de abertura de lojas ficou estável")
+        destaques([
+            (fmt_int(ini), f"inaugurações em {primeiro}"),
+            (fmt_int(fim), f"inaugurações em {ultimo}"),
+            (fmt_reais_mi(anual.loc[primeiro, "capex_lojas_novas"]), f"investidos em lojas novas em {primeiro}"),
+            (fmt_reais_mi(anual.loc[ultimo, "capex_lojas_novas"]), f"investidos em lojas novas em {ultimo}"),
+        ])
+    else:
+        st.subheader("Abertura de lojas")
     c1, c2 = st.columns(2)
     with c1:
         grafico(grafico_barras(ind, [("inauguracoes_petz", "Petz", "Petz"), ("inauguracoes_cobasi", "Cobasi", "Cobasi")],
@@ -162,7 +179,18 @@ with abas[5]:
 with abas[6]:
     grafico(grafico_linhas(ind, [("caixa_total", "Caixa total", "Grupo"), ("divida_bruta", "Dívida bruta", 1)], "mi",
                            "Caixa total e dívida bruta (R$ milhões)", altura=400))
-    st.caption("O grupo tem mais caixa (incluindo aplicações financeiras) do que dívida em todo o período. A queda do "
-               "caixa no 1T26 coincide com a saída de recursos ligada à combinação de negócios.")
+    liquida = ind["divida_liquida"].dropna()
+    if not liquida.empty and (liquida < 0).all():
+        situacao = "O grupo tem mais caixa (incluindo aplicações financeiras) do que dívida em todo o período: caixa líquido."
+    elif not liquida.empty and liquida.iloc[-1] < 0:
+        situacao = (f"No {faixas['ultimo']}, o grupo tem mais caixa (incluindo aplicações financeiras) do que dívida, "
+                    "mas isso não vale para todo o período.")
+    elif not liquida.empty:
+        situacao = f"No {faixas['ultimo']}, a dívida líquida é de {fmt_reais_mi(liquida.iloc[-1])}."
+    else:
+        situacao = ""
+    if pd.Period("2026Q1", freq="Q") in ind.index:
+        situacao += " A queda do caixa no 1T26 coincide com a saída de recursos ligada à combinação de negócios."
+    st.caption(situacao)
     grafico(grafico_barras(ind, [("fluxo_caixa_operacional", "Fluxo de caixa operacional", "Grupo")], "mi",
                            "Fluxo de caixa operacional (R$ milhões)"))

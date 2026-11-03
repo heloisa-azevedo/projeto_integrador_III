@@ -4,7 +4,7 @@ from pathlib import Path
 import streamlit as st
 
 from src.analysis.indicadores import rotulo_trimestre
-from src.util.componentes import barra_lateral_dados, cuidados, exigir_base, leitura, quadro
+from src.util.componentes import barra_lateral_dados, cuidados, exigir_base, leitura, leitura_com_ia, quadro
 
 barra_lateral_dados()
 base, _ = exigir_base()
@@ -15,7 +15,7 @@ st.markdown('<p class="pc-lead">A pergunta do trabalho é se a fusão aumentou o
 
 if base["depois"]:
     st.subheader("O que cada sinal indica")
-    leitura(base["comparacao"])
+    leitura(base["comparacao"], base["indicadores"], base["depois"])
     periodo = " e ".join(rotulo_trimestre(p) for p in base["depois"])
     st.caption(f"Leitura automática com base em {periodo}, comparados com os mesmos trimestres de um ano antes.")
 
@@ -24,8 +24,10 @@ if base["depois"]:
     quadro(principais.to_dict("records"),
            [("Antes", "antes", "antes"), ("Depois", "depois", "depois"), ("Variação", "delta", "delta")])
 
+leitura_com_ia(base, "leitura_ia_conclusao")
+
 st.subheader("Resposta do grupo")
 st.markdown((Path(__file__).resolve().parents[2] / "content" / "conclusao.md").read_text(encoding="utf-8"))
 
 st.subheader("Limitações")
-cuidados()
+cuidados(base)
