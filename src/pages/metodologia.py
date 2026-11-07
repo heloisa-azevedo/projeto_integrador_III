@@ -17,7 +17,7 @@ st.subheader("Fonte")
 st.markdown(
     f"""
 Todos os números vêm da **Planilha Interativa** publicada no site de Relações com Investidores do Grupo Petz Cobasi
-(origem: {caminho}). As contas estão em R$ mil e foram convertidas para R$ milhões nos gráficos.
+(origem: {caminho}). As contas estão em R\\$ milhares e foram convertidas para R\\$ milhões nos gráficos.
 
 - **De {faixas['pre']}** os trimestres são **pro forma**: a companhia recalculou o histórico como se Petz e Cobasi já fossem
   uma só empresa. Isso permite comparar negócios do mesmo tamanho antes e depois da fusão.
