@@ -151,7 +151,7 @@ def cuidados(base):
     f = faixas_do_periodo(base["indicadores"])
     n = len(base["depois"])
     gerais = [
-        f"O histórico pro forma ({f['pre']}) foi montado pela própria companhia.",
+        f"O histórico pro forma ({f['pre']}) foi montado pela própria companhia; o trabalho deve citar essa fonte.",
         f"A comparação usa {n} {'trimestre' if n == 1 else 'trimestres'} depois da fusão: as diferenças são indícios, "
         "não provas estatísticas. Ela também não isola fatores externos, como juros, inflação e o desempenho do varejo.",
     ]
