@@ -26,7 +26,7 @@ if base["depois"]:
 
 leitura_com_ia(base, "leitura_ia_conclusao")
 
-st.subheader("Resposta do grupo")
+st.subheader("Conclusão")
 st.markdown((Path(__file__).resolve().parents[2] / "content" / "conclusao.md").read_text(encoding="utf-8"))
 
 st.subheader("Limitações")
