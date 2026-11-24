@@ -7,6 +7,7 @@ from src.util.componentes import (barra_lateral_dados, cuidados, destaques, exig
                                   legenda_limiares, quadro)
 from src.util.estilo import fmt_int, fmt_pct, fmt_reais_mi
 from src.util.graficos import CONFIG, grafico_barras, grafico_cidades, grafico_linhas
+from src.util.graficobolha import grafico_bolhas_lojas
 
 barra_lateral_dados()
 base, _ = exigir_base()
@@ -146,6 +147,12 @@ with abas[4]:
         grafico(grafico_barras(ind, [("capex_lojas_novas", "Lojas novas e hospitais", 0), ("capex_reformas", "Reformas e manutenção", 1),
                                      ("capex_tecnologia", "Tecnologia e digital", 2)], "mi", "CAPEX por tipo (R$ milhões)"))
     grafico(grafico_barras(ind, [("lojas_petz", "Petz", "Petz"), ("lojas_cobasi", "Cobasi", "Cobasi")], "int", "Número de lojas"))
+
+if not base["lojas"].empty and "area_m2" in base["lojas"].columns:
+        grafico(grafico_bolhas_lojas(base["lojas"], "Lojas Petz e Cobasi no Brasil (tamanho = área em m²)"))
+        st.caption("Cada bolha é uma loja, segundo a aba Lista de Lojas. Lojas da mesma cidade aparecem espalhadas "
+                   "em volta da sede do município; a posição dentro da cidade é ilustrativa.")
+
 
 # ============================================================== SOBREPOSIÇÃO
 with abas[5]:
