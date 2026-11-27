@@ -54,15 +54,30 @@ st.markdown(
     f"""
 - **Antes × depois:** cada trimestre do primeiro ano pós-fusão é comparado com o mesmo trimestre do ano anterior, o que
   neutraliza a sazonalidade do varejo e garante que o "antes" seja sempre anterior à fusão. Margens são calculadas sobre a soma das contas do período, e não pela média das margens.
-- **Contra a tendência:** para cada indicador, ajustamos por mínimos quadrados uma tendência linear com efeito de cada
-  trimestre do ano, usando só {faixas['pre']}. A projeção para o período pós-fusão é o que se esperaria sem a fusão; a diferença para o
-  real é o efeito estimado.
+- **Contra a tendência:** compara o valor real com a tendência de antes da fusão projetada para depois dela
+  (veja abaixo como ela é calculada).
 - **Mudança relevante:** variações acima de {f'{LIMIAR_PP * 100:.1f}'.replace('.', ',')} ponto percentual nas margens ou de
   {LIMIAR_DIAS} dias nos prazos. Abaixo disso, tratamos como estabilidade.
 - **Sobreposição:** uma cidade tem sobreposição quando há pelo menos uma loja de cada bandeira, segundo a aba
   Lista de Lojas da planilha.
 """
 )
+
+st.subheader("Como a tendência é calculada")
+st.latex(r"\text{indicador} = a + b \cdot t + s_2 \cdot T_2 + s_3 \cdot T_3 + s_4 \cdot T_4")
+st.markdown(
+    f"""
+- **t** conta os trimestres (0, 1, 2…): **b** é quanto o indicador sobe ou cai a cada trimestre.
+- **T₂, T₃ e T₄** valem 1 quando o trimestre é o 2º, 3º ou 4º do ano: **s₂, s₃ e s₄** capturam a sazonalidade
+  (o 4º trimestre, com Black Friday e Natal, costuma ser diferente do 1º).
+- Os coeficientes são estimados por mínimos quadrados **só com {faixas['pre']}** e a equação é estendida para os
+  trimestres pós-fusão: esse é o valor esperado se a fusão não tivesse acontecido.
+- **Efeito estimado = real − tendência**, em pontos percentuais (margens) ou dias (prazos).
+"""
+)
+st.caption(f"São {faixas['n_total'] - faixas['n_pos']} trimestres para estimar 5 coeficientes, então a projeção tem margem de erro: "
+           "diferenças pequenas podem ser só a variação normal do indicador. Código: tendencia_sem_fusao, "
+           "em src/analysis/indicadores.py.")
 
 st.subheader("Tabelas para conferência")
 aba1, aba2, aba3, aba4 = st.tabs(["Indicadores por trimestre", "Contas da planilha", "Lista de lojas", "Exploração dos dados"])
