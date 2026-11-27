@@ -8,7 +8,7 @@ textColor = "#1D2858"
 font = "Figtree:https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&display=swap, sans-serif"
 headingFont = "Outfit:https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700;800&display=swap, sans-serif"
 baseRadius = "10px"
-chartCategoricalColors = ["#1D2858", "#4F7CAC", "#6E9A63", "#C56A3B", "#8A8FA3"]
+chartCategoricalColors = ["#1D2858", "#4F7CAC", "#E06C0A", "#3E7C7A", "#8A8FA3"]
 
 [theme.sidebar]
 backgroundColor = "#93b7cc"

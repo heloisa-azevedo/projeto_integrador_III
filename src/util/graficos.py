@@ -5,7 +5,7 @@ import plotly.graph_objects as go
 
 from src.analysis.eventos import EVENTOS, EVENTOS_NOS_GRAFICOS, TRIMESTRE_FUSAO
 from src.analysis.indicadores import rotulo_trimestre
-from src.util.estilo import CINZA, COR_EMPRESA, COR_EXTRA, MARINHO, TERRACOTA, TINTA_SUAVE
+from src.util.estilo import CINZA, COR_EMPRESA, COR_EXTRA, COR_POS_FUSAO, MARINHO, TINTA_SUAVE
 
 FORMATOS = {
     "pct": {"tick": ".0%", "hover": ".1%", "sufixo": ""},
@@ -54,9 +54,9 @@ def _marcar_fusao(fig, periodos, rotulos):
     lista = list(periodos)
     if TRIMESTRE_FUSAO <= periodos[-1]:
         pos = lista.index(TRIMESTRE_FUSAO) if TRIMESTRE_FUSAO in lista else 0
-        fig.add_vrect(x0=pos - 0.5, x1=len(lista) - 0.5, fillcolor=TERRACOTA, opacity=0.09, line_width=0, layer="below")
+        fig.add_vrect(x0=pos - 0.5, x1=len(lista) - 0.5, fillcolor=COR_POS_FUSAO, opacity=0.09, line_width=0, layer="below")
         fig.add_annotation(x=pos - 0.4, y=1, yref="paper", text="Pós-fusão", showarrow=False, xanchor="left",
-                           yanchor="top", font=dict(color=TERRACOTA, size=12, family="Figtree, sans-serif"))
+                           yanchor="top", font=dict(color=COR_POS_FUSAO, size=12, family="Figtree, sans-serif"))
     for ev in EVENTOS:
         if ev["titulo"] not in EVENTOS_NOS_GRAFICOS or ev["titulo"] == "Fusão concluída":
             continue

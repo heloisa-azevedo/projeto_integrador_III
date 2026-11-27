@@ -4,14 +4,14 @@ import math
 import streamlit as st
 
 MARINHO = "#1D2858"     # identidade do grupo / pro forma
-TERRACOTA = "#C56A3B"   # usado SÓ para marcar o período pós-fusão
+TERRACOTA = "#C56A3B"   # cor destaque da intrface
 CREME = "#F6F4EA"
 TINTA_SUAVE = "#5B6283"
 CINZA = "#8A8FA3"
 
-COR_EMPRESA = {"Petz": "#4F7CAC", "Cobasi": "#6E9A63", "Grupo": MARINHO, "Pro forma": MARINHO}
-# Séries que não são empresas (prazos, tipos de CAPEX). Terracota fica reservada ao pós-fusão.
-COR_EXTRA = ["#3E7C7A", "#B08D57", "#7E6BA8"]
+COR_EMPRESA = {"Petz": "#4F7CAC", "Cobasi": "#E06C0A", "Grupo": MARINHO, "Pro forma": MARINHO}
+COR_POS_FUSAO = MARINHO
+COR_EXTRA = ["#3E7C7A", "#7E6BA8", "#5B6283"]
 
 
 # ---------------------------------------------------------------- números pt-BR
