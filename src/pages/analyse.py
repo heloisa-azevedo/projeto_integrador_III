@@ -8,7 +8,13 @@ from src.util.componentes import (barra_lateral_dados, cuidados, destaques, exig
 from src.util.estilo import fmt_int, fmt_pct, fmt_reais_mi
 from src.util.graficos import CONFIG, grafico_barras, grafico_cidades, grafico_linhas, grafico_acao, grafico_retorno_anormal
 from src.util.graficobolha import grafico_bolhas_lojas
+<<<<<<< HEAD
 from src.analysis.acao import TICKER_INDICE, base_100, baixar_precos, serie_do_grupo, tabela_eventos
+=======
+from src.analysis.bandeiras import (com_participacao, comparar_bandeiras, receita_contra_tendencia,
+                                    sobreposicao_por_bandeira)
+from src.util.estilo import fmt_delta, fmt_valor
+>>>>>>> b1cd273db7666846c00fb22c2ee3894a8c484cd1
 
 barra_lateral_dados()
 base, _ = exigir_base()
@@ -29,7 +35,12 @@ def grafico(fig):
     st.plotly_chart(fig, config=CONFIG)
 
 
+<<<<<<< HEAD
 abas = st.tabs(["Resumo", "Crescimento", "Margens", "Capital de giro", "Expansão", "Sobreposição", "Caixa e dívida", "Bolsa"])
+=======
+abas = st.tabs(["Resumo", "Crescimento", "Margens", "Capital de giro", "Expansão", "Sobreposição", "Caixa e dívida",
+                "Petz × Cobasi"])
+>>>>>>> b1cd273db7666846c00fb22c2ee3894a8c484cd1
 
 # ============================================================== RESUMO
 with abas[0]:
@@ -203,6 +214,7 @@ with abas[6]:
     grafico(grafico_barras(ind, [("fluxo_caixa_operacional", "Fluxo de caixa operacional", "Grupo")], "mi",
                            "Fluxo de caixa operacional (R$ milhões)"))
 
+<<<<<<< HEAD
 # ============================================================== BOLSA
 @st.cache_data(ttl=60 * 60 * 12, show_spinner="Baixando cotações...")
 def _cotacoes():
@@ -255,3 +267,140 @@ with abas[7]:
             st.caption("Barras: retorno anormal de cada pregão (escuras: os três pregões somados na tabela). "
                        "Linha: retorno anormal acumulado desde 5 pregões antes do evento.")
 
+=======
+
+# ============================================================== PETZ × COBASI
+def _fmt_bandeira(valor, formato):
+    if formato == "m2":
+        return "–" if pd.isna(valor) else f"R$ {fmt_int(valor)}/m²"
+    return fmt_valor(valor, formato)
+
+
+def _fmt_delta_bandeira(delta, formato):
+    if formato == "m2":
+        return fmt_delta(delta, "reais")
+    if formato == "int":
+        if pd.isna(delta):
+            return "–"
+        return ("+" if delta > 0 else "−" if delta < 0 else "±") + fmt_int(abs(delta))
+    return fmt_delta(delta, formato)
+
+
+def quadro_bandeiras(comp):
+    """Variação de cada bandeira (antes → depois embaixo) e quem avançou mais."""
+    import html as _html
+    cab = "".join(f"<th>{t}</th>" for t in ["Petz", "Cobasi", "Avançou mais"])
+    corpo = []
+    for _, l in comp.iterrows():
+        celulas = []
+        for b in ["Petz", "Cobasi"]:
+            d = l[f"{b}_delta"]
+            destaque = pd.notna(d) and (abs(d) > 0.005 if l["formato"] == "pct" else d != 0)
+            classe = "pc-delta" if destaque else "pc-delta neutro"
+            de_para = f'{_fmt_bandeira(l[f"{b}_antes"], l["formato"])} → {_fmt_bandeira(l[f"{b}_depois"], l["formato"])}'
+            celulas.append(f'<td class="num"><span class="{classe}">{_fmt_delta_bandeira(d, l["formato"])}</span>'
+                           f'<div class="explica" style="text-align:right">{_html.escape(de_para)}</div></td>')
+        quem = l["avancou_mais"]
+        celulas.append(f'<td class="num">{_html.escape(quem) if isinstance(quem, str) and quem else "–"}</td>')
+        corpo.append(f'<tr><td><div class="nome">{_html.escape(l["nome"])}</div>'
+                     f'<div class="explica">{_html.escape(l["explica"])}</div></td>{"".join(celulas)}</tr>')
+    st.markdown(f'<table class="pc-quadro"><thead><tr><th>Indicador</th>{cab}</tr></thead>'
+                f'<tbody>{"".join(corpo)}</tbody></table>', unsafe_allow_html=True)
+
+
+with abas[7]:
+    st.subheader("Qual bandeira se beneficiou mais?")
+    st.markdown('<p class="pc-nota">A planilha do RI separa Petz e Cobasi só em receita, vendas mesmas lojas, lojas, '
+                "inaugurações e área. Margens, despesas e lucro existem apenas para o grupo. Por isso esta aba mostra "
+                "<b>qual bandeira passou a vender mais</b> depois da fusão, não qual passou a lucrar mais.</p>",
+                unsafe_allow_html=True)
+    if not base["depois"]:
+        st.info("Ainda não há trimestres publicados depois da fusão na planilha carregada.")
+    else:
+        comp = comparar_bandeiras(ind, base["antes"], base["depois"])
+        txt_antes = " e ".join(rotulo_trimestre(p) for p in base["antes"])
+        txt_depois = " e ".join(rotulo_trimestre(p) for p in base["depois"])
+
+        # ---- placar
+        contagem = comp["avancou_mais"].value_counts()
+        n_petz, n_cobasi, n_empate = (int(contagem.get(k, 0)) for k in ["Petz", "Cobasi", "Empate"])
+        destaques([
+            (fmt_int(n_petz), "indicadores em que a Petz avançou mais"),
+            (fmt_int(n_cobasi), "indicadores em que a Cobasi avançou mais"),
+            (fmt_int(n_empate), "indicadores praticamente empatados"),
+        ])
+
+        st.subheader("Antes × depois, por bandeira")
+        st.markdown(f'<p class="pc-nota">Depois = <b>{txt_depois}</b>; antes = <b>{txt_antes}</b>, os mesmos trimestres '
+                    "um ano antes. O crescimento \"antes\" compara com mais um ano para trás. Diferenças entre as "
+                    "bandeiras menores que 0,5 p.p. (ou 1 p.p. nas variações em %) contam como empate.</p>",
+                    unsafe_allow_html=True)
+        quadro_bandeiras(comp)
+
+        # ---- real × tendência
+        st.subheader("Receita contra a tendência de cada bandeira")
+        tend_b, gap_b = receita_contra_tendencia(ind)
+        if tend_b:
+            st.markdown(f'<p class="pc-nota">Tendência e sazonalidade da receita bruta de {faixas["pre"]}, projetadas '
+                        "como se a fusão não tivesse acontecido. Quem ficou mais acima da linha pontilhada cresceu mais "
+                        "do que o próprio histórico indicava.</p>", unsafe_allow_html=True)
+            destaques([(fmt_delta(gap_b[b], "reais"), f"receita da {b} acima da tendência (média pós-fusão)")
+                       for b in gap_b])
+            c1, c2 = st.columns(2)
+            for coluna_st, b in zip([c1, c2], ["Petz", "Cobasi"]):
+                if b in tend_b:
+                    with coluna_st:
+                        grafico(grafico_linhas(ind, [(f"receita_bruta_{b.lower()}", "Real", b)], "mi",
+                                               f"Receita bruta {b}: real × tendência (R$ milhões)",
+                                               tendencia=tend_b[b]))
+        else:
+            st.info("Não há trimestres suficientes antes da fusão para estimar a tendência.")
+
+        # ---- participação
+        st.subheader("Quem ganhou espaço dentro do grupo")
+        grafico(grafico_linhas(com_participacao(ind), [("participacao_cobasi", "Cobasi", "Cobasi")], "pct",
+                               "Participação da Cobasi na receita bruta do grupo", altura=380))
+        st.caption("O restante é a Petz. Se a linha sobe no período sombreado, a Cobasi ganhou espaço depois da fusão; "
+                   "se desce, quem ganhou foi a Petz.")
+
+        # ---- sobreposição
+        sob = sobreposicao_por_bandeira(base["lojas"])
+        if sob:
+            st.subheader("Quem mais disputava clientes com a outra")
+            itens = []
+            for b, v in sob.items():
+                itens.append((fmt_pct(v["participacao"], 0),
+                              f"das lojas {b} ({v['em_cidades_ambas']} de {v['total']}) ficam em cidades com a outra bandeira"))
+            destaques(itens)
+            mais_exposta = max(sob, key=lambda b: sob[b]["participacao"])
+            st.caption(f"A {mais_exposta} é, proporcionalmente, a bandeira mais exposta à antiga concorrência. Se a fusão "
+                       "reduziu a disputa local, ela é a que mais poderia se beneficiar. A planilha não traz receita por "
+                       "loja, então não dá para medir isso diretamente.")
+
+        # ---- leitura
+        st.subheader("O que os números sugerem")
+        ganhou = {b: [l["nome"].lower() for _, l in comp.iterrows() if l["avancou_mais"] == b] for b in ["Petz", "Cobasi"]}
+        frases = []
+        for b in ["Petz", "Cobasi"]:
+            if ganhou[b]:
+                frases.append(f"A {b} avançou mais em: {', '.join(ganhou[b])}.")
+        if n_petz == n_cobasi:
+            frases.append("Nenhuma bandeira se destaca com clareza: as duas melhoraram em ritmos parecidos.")
+        else:
+            lider = "Petz" if n_petz > n_cobasi else "Cobasi"
+            frases.append(f"Pelos indicadores de venda, a {lider} parece ter se beneficiado um pouco mais, "
+                          "mas a diferença deve ser lida com cautela.")
+        st.markdown(" ".join(frases))
+
+        st.subheader("Cuidados na interpretação")
+        n = len(base["depois"])
+        st.markdown(
+            "- **Margem e lucro não podem ser atribuídos a uma bandeira**: a planilha só traz esses números para o grupo.\n"
+            "- **Não há receita por loja**, então não dá para testar se as lojas em cidades com as duas bandeiras "
+            "melhoraram mais que as demais.\n"
+            f"- **Só {n} {'trimestre' if n == 1 else 'trimestres'} depois da fusão**: as diferenças são indícios, "
+            "não provas estatísticas.\n"
+            "- **\"Quem se beneficiou\" também pode ser lido como quais acionistas ganharam** (os da Petz ou os donos da "
+            "Cobasi). Isso depende da relação de troca das ações e da cotação, que não estão nesta planilha."
+        )
+>>>>>>> b1cd273db7666846c00fb22c2ee3894a8c484cd1
