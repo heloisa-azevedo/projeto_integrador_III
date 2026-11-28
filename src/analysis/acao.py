@@ -1,11 +1,32 @@
+"""Ação na bolsa: reação da PETZ3 aos eventos da fusão (estudo de evento) e desempenho do grupo depois dela.
+
+Preços do Yahoo Finance pela biblioteca yfinance:
+    PETZ3.SA  Petz, negociada até o fim de 2025
+    AUAU3.SA  Grupo Petz Cobasi, negociado desde janeiro de 2026 (1 ação nova para cada ação da Petz)
+    ^BVSP     Ibovespa, usado para descontar o movimento do mercado
+
+O Yahoo pode não ter mais o histórico da PETZ3 (ela deixou de ser negociada) ou bloquear acessos vindos do
+Streamlit Cloud. O que faltar é completado por data/raw/precos.csv (colunas: data, ticker, fechamento),
+que o script scripts/precos_b3.py monta com as cotações oficiais da B3.
+
+Estudo de evento (modelo de mercado):
+1. Com os retornos diários de 150 a 11 pregões antes do evento, estima-se o comportamento normal da ação:
+   retorno_ação = α + β × retorno_Ibovespa.
+2. Retorno anormal = retorno real − retorno esperado pelo modelo.
+3. Soma-se o retorno anormal na janela do evento (do pregão anterior ao seguinte) e compara-se com a
+   oscilação normal da ação: estatística t acima de 1,96 (em módulo) indica reação fora do comum.
+"""
 from pathlib import Path
+
 import numpy as np
 import pandas as pd
+
 from src.analysis.eventos import EVENTOS
 
 TICKER_PETZ = "PETZ3.SA"
 TICKER_GRUPO = "AUAU3.SA"
 TICKER_INDICE = "^BVSP"
+TICKER_INDICE_ALTERNATIVO = "BOVA11.SA"   # ETF do Ibovespa, usado se o índice não estiver disponível
 ARQUIVO_RESERVA = Path(__file__).resolve().parents[2] / "data" / "raw" / "precos.csv"
 
 JANELA_ESTIMACAO = (-150, -11)   # pregões em relação ao dia do evento
@@ -14,28 +35,65 @@ DIAS_GRAFICO = 5                 # o gráfico do evento mostra de −5 a +5 preg
 T_CRITICO = 1.96                 # 95% de confiança
 
 
+def _do_yahoo(tickers, inicio):
+    """Preços do Yahoo Finance; colunas vazias são descartadas (ticker sem histórico ou download bloqueado)."""
+    import yfinance as yf
+
+    dados = yf.download(tickers, start=inicio, auto_adjust=True, progress=False)
+    if dados.empty:
+        return pd.DataFrame()
+    precos = dados["Close"] if isinstance(dados.columns, pd.MultiIndex) else dados[["Close"]].rename(columns={"Close": tickers[0]})
+    return precos.dropna(axis=1, how="all").dropna(how="all")
+
+
+def _do_arquivo():
+    """data/raw/precos.csv (colunas data, ticker, fechamento), gerado por scripts/precos_b3.py ou à mão."""
+    if not ARQUIVO_RESERVA.exists():
+        return pd.DataFrame()
+    bruto = pd.read_csv(ARQUIVO_RESERVA, parse_dates=["data"])
+    return bruto.pivot_table(index="data", columns="ticker", values="fechamento")
+
+
 def baixar_precos(inicio="2023-06-01"):
-    """Preços de fechamento ajustados (por dividendos e desdobramentos). Devolve (DataFrame, origem)."""
+    """Junta as duas fontes: o Yahoo Finance traz o que conseguir e o arquivo completa o que faltar.
+    Assim o arquivo só precisa ter a PETZ3, se for ela que o Yahoo não tiver mais. Devolve (DataFrame, origem)."""
     tickers = [TICKER_PETZ, TICKER_GRUPO, TICKER_INDICE]
     try:
-        import yfinance as yf
-
-        dados = yf.download(tickers, start=inicio, auto_adjust=True, progress=False)
-        precos = dados["Close"] if isinstance(dados.columns, pd.MultiIndex) else dados
-        precos = precos.dropna(how="all")
-        if TICKER_PETZ not in precos or precos[TICKER_PETZ].dropna().empty:
-            raise ValueError("o Yahoo Finance não devolveu os preços da PETZ3")
-        origem = "Yahoo Finance (yfinance)"
+        yahoo = _do_yahoo(tickers, inicio)
+        erro_yahoo = None
     except Exception as erro:
-        if not ARQUIVO_RESERVA.exists():
-            raise RuntimeError(f"não foi possível baixar as cotações ({erro}) e não existe data/raw/precos.csv") from erro
-        bruto = pd.read_csv(ARQUIVO_RESERVA, parse_dates=["data"])
-        precos = bruto.pivot_table(index="data", columns="ticker", values="fechamento")
-        origem = f"arquivo {ARQUIVO_RESERVA.name}"
+        yahoo, erro_yahoo = pd.DataFrame(), erro
+    arquivo = _do_arquivo()
+
+    colunas, origens = {}, []
+    for t in tickers:
+        if t in yahoo and yahoo[t].notna().any():
+            colunas[t] = yahoo[t]
+            origens.append(f"{t.replace('.SA', '')}: Yahoo Finance")
+        elif t in arquivo and arquivo[t].notna().any():
+            colunas[t] = arquivo[t]
+            origens.append(f"{t.replace('.SA', '')}: {ARQUIVO_RESERVA.name}")
+
+    if TICKER_INDICE not in colunas:
+        for fonte, nome in ((yahoo, "Yahoo Finance"), (arquivo, ARQUIVO_RESERVA.name)):
+            if TICKER_INDICE_ALTERNATIVO in fonte and fonte[TICKER_INDICE_ALTERNATIVO].notna().any():
+                colunas[TICKER_INDICE] = fonte[TICKER_INDICE_ALTERNATIVO]
+                origens.append(f"Ibovespa aproximado pelo BOVA11: {nome}")
+                break
+
+    faltando = [t.replace(".SA", "") for t in (TICKER_PETZ, TICKER_INDICE) if t not in colunas]
+    if faltando:
+        motivo = f"o Yahoo Finance falhou ({erro_yahoo})" if erro_yahoo else "o Yahoo Finance não devolveu essas cotações"
+        dica = ("rode python -m scripts.precos_b3 para criar data/raw/precos.csv" if not ARQUIVO_RESERVA.exists()
+                else f"elas também não estão em data/raw/{ARQUIVO_RESERVA.name}")
+        raise RuntimeError(f"faltam as cotações de {', '.join(faltando)}: {motivo}; {dica}")
+
+    precos = pd.DataFrame(colunas)
     precos.index = pd.to_datetime(precos.index)
     if precos.index.tz is not None:
         precos.index = precos.index.tz_localize(None)
-    return precos.sort_index(), origem
+    precos = precos[precos.index >= pd.Timestamp(inicio)].sort_index()
+    return precos, "; ".join(origens)
 
 
 def serie_do_grupo(precos):
