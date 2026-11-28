@@ -5,16 +5,11 @@ import streamlit as st
 from src.analysis.indicadores import anos_completos, faixas_do_periodo, rotulo_trimestre
 from src.util.componentes import (barra_lateral_dados, cuidados, destaques, exigir_base, leitura, leitura_com_ia,
                                   legenda_limiares, quadro)
-from src.util.estilo import fmt_int, fmt_pct, fmt_reais_mi
+from src.analysis.bandeiras import (com_participacao, comparar_bandeiras, receita_contra_tendencia, sobreposicao_por_bandeira)
+from src.util.estilo import fmt_int, fmt_pct, fmt_reais_mi, fmt_delta, fmt_valor
 from src.util.graficos import CONFIG, grafico_barras, grafico_cidades, grafico_linhas, grafico_acao, grafico_retorno_anormal
 from src.util.graficobolha import grafico_bolhas_lojas
-<<<<<<< HEAD
 from src.analysis.acao import TICKER_INDICE, base_100, baixar_precos, serie_do_grupo, tabela_eventos
-=======
-from src.analysis.bandeiras import (com_participacao, comparar_bandeiras, receita_contra_tendencia,
-                                    sobreposicao_por_bandeira)
-from src.util.estilo import fmt_delta, fmt_valor
->>>>>>> b1cd273db7666846c00fb22c2ee3894a8c484cd1
 
 barra_lateral_dados()
 base, _ = exigir_base()
@@ -35,12 +30,9 @@ def grafico(fig):
     st.plotly_chart(fig, config=CONFIG)
 
 
-<<<<<<< HEAD
-abas = st.tabs(["Resumo", "Crescimento", "Margens", "Capital de giro", "Expansão", "Sobreposição", "Caixa e dívida", "Bolsa"])
-=======
-abas = st.tabs(["Resumo", "Crescimento", "Margens", "Capital de giro", "Expansão", "Sobreposição", "Caixa e dívida",
-                "Petz × Cobasi"])
->>>>>>> b1cd273db7666846c00fb22c2ee3894a8c484cd1
+abas = st.tabs(["Resumo", "Crescimento", "Margens", "Capital de giro", "Expansão", "Sobreposição", "Caixa e dívida", "Bolsa", "Petz × Cobasi"])
+
+
 
 # ============================================================== RESUMO
 with abas[0]:
@@ -214,7 +206,6 @@ with abas[6]:
     grafico(grafico_barras(ind, [("fluxo_caixa_operacional", "Fluxo de caixa operacional", "Grupo")], "mi",
                            "Fluxo de caixa operacional (R$ milhões)"))
 
-<<<<<<< HEAD
 # ============================================================== BOLSA
 @st.cache_data(ttl=60 * 60 * 12, show_spinner="Baixando cotações...")
 def _cotacoes():
@@ -267,7 +258,7 @@ with abas[7]:
             st.caption("Barras: retorno anormal de cada pregão (escuras: os três pregões somados na tabela). "
                        "Linha: retorno anormal acumulado desde 5 pregões antes do evento.")
 
-=======
+
 
 # ============================================================== PETZ × COBASI
 def _fmt_bandeira(valor, formato):
@@ -308,7 +299,7 @@ def quadro_bandeiras(comp):
                 f'<tbody>{"".join(corpo)}</tbody></table>', unsafe_allow_html=True)
 
 
-with abas[7]:
+with abas[8]:
     st.subheader("Qual bandeira se beneficiou mais?")
     st.markdown('<p class="pc-nota">A planilha do RI separa Petz e Cobasi só em receita, vendas mesmas lojas, lojas, '
                 "inaugurações e área. Margens, despesas e lucro existem apenas para o grupo. Por isso esta aba mostra "
@@ -403,4 +394,4 @@ with abas[7]:
             "- **\"Quem se beneficiou\" também pode ser lido como quais acionistas ganharam** (os da Petz ou os donos da "
             "Cobasi). Isso depende da relação de troca das ações e da cotação, que não estão nesta planilha."
         )
->>>>>>> b1cd273db7666846c00fb22c2ee3894a8c484cd1
+
