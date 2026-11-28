@@ -18,6 +18,9 @@ googlenewsdecoder
 matplotlib
 seaborn
 
+# cotação da bolsa
+yfinance
+
 # IA
 groq
 ollama

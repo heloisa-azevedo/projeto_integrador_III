@@ -1,5 +1,6 @@
 """Gráficos em Plotly com o período pós-fusão sombreado e o anúncio da fusão marcado.
 Mesma lógica dos gráficos do painel interativo."""
+import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 
@@ -183,4 +184,57 @@ def linha(lista_dados, x: str, y: str, lista_empresas):
         yaxis=dict(tickformat=",.2f", exponentformat="none"),
         template="plotly_white", margin=dict(l=40, r=40, t=40, b=80),
     )
+    return fig
+
+# ---------------------------------------------------------------- ação na bolsa (aba Bolsa)
+def grafico_acao(serie_grupo, indice, titulo=None):
+    """Ação (PETZ3 e depois AUAU3) contra o Ibovespa, ambos em base 100, com os marcos da fusão."""
+    fig = go.Figure()
+    fig.add_scatter(x=indice.index, y=indice, name="Ibovespa", mode="lines",
+                    line=dict(color=CINZA, width=2), hovertemplate="%{y:.1f}")
+    fig.add_scatter(x=serie_grupo.index, y=serie_grupo, name="PETZ3 → AUAU3", mode="lines",
+                    line=dict(color=MARINHO, width=2.5), hovertemplate="%{y:.1f}")
+    conclusao = pd.Timestamp("2026-01-02")
+    if serie_grupo.index.max() >= conclusao:
+        fig.add_vrect(x0=conclusao, x1=serie_grupo.index.max(), fillcolor=COR_POS_FUSAO, opacity=0.07, line_width=0,
+                      layer="below")
+    # só os marcos do estudo de evento e a conclusão; rótulos alternam de altura para não se sobreporem
+    marcos = [ev for ev in EVENTOS if ev.get("estudo_evento") or ev["titulo"] == "Fusão concluída"]
+    marcos = [ev for ev in marcos if serie_grupo.index.min() <= pd.Timestamp(ev["data"]) <= serie_grupo.index.max()]
+    for k, ev in enumerate(marcos):
+        data = pd.Timestamp(ev["data"])
+        fig.add_shape(type="line", x0=data, x1=data, y0=0, y1=1, yref="paper", line=dict(color=CINZA, width=1, dash="dot"))
+        fig.add_annotation(x=data, y=1, yref="paper", text=ev["rotulo"], showarrow=False, yanchor="bottom",
+                           yshift=16 if k % 2 else 0, font=dict(color=TINTA_SUAVE, size=11))
+    fig.update_layout(
+        title=dict(text=titulo, x=0, font=dict(family="Outfit, Source Sans 3, sans-serif", size=17, color=MARINHO)) if titulo else None,
+        height=440, margin=dict(l=8, r=8, t=76 if titulo else 50, b=8), separators=",.", hovermode="x unified",
+        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(family="Figtree, Source Sans 3, sans-serif", color=MARINHO, size=13),
+        # legenda em fonte de sistema: o Plotly mede o texto antes da fonte da página carregar e cortava o fim do nome
+        legend=dict(orientation="h", y=-0.12, x=0, title=None, font=dict(family="Arial, sans-serif", size=13)),
+        hoverlabel=dict(bgcolor="white", font_color=MARINHO),
+    )
+    fig.update_yaxes(gridcolor="rgba(29,40,88,.08)", zeroline=False, ticksuffix="")
+    fig.update_xaxes(showgrid=False, tickformat="%b/%y")
+    return fig
+
+
+def grafico_retorno_anormal(janela):
+    """Barras: retorno anormal de cada pregão. Linha: retorno anormal acumulado. Dias −5 a +5 do evento."""
+    fig = go.Figure()
+    cores = [MARINHO if d in (-1, 0, 1) else "rgba(29,40,88,.35)" for d in janela["dia"]]
+    fig.add_bar(x=janela["dia"], y=np.exp(janela["anormal"]) - 1, name="Retorno anormal",
+                marker_color=cores, hovertemplate="%{y:.1%}")
+    fig.add_scatter(x=janela["dia"], y=np.exp(janela["anormal_acumulado"]) - 1, name="Acumulado",
+                    mode="lines+markers", line=dict(color=COR_EMPRESA["Petz"], width=2.5), hovertemplate="%{y:.1%}")
+    fig.update_layout(
+        height=340, margin=dict(l=8, r=8, t=20, b=8), separators=",.", hovermode="x unified",
+        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(family="Figtree, Source Sans 3, sans-serif", color=MARINHO, size=13),
+        legend=dict(orientation="h", y=-0.2, x=0, title=None, font=dict(family="Arial, sans-serif", size=13)),
+        hoverlabel=dict(bgcolor="white", font_color=MARINHO),
+    )
+    fig.update_yaxes(tickformat=".0%", gridcolor="rgba(29,40,88,.08)", zeroline=True, zerolinecolor=CINZA)
+    fig.update_xaxes(title="Pregões em relação ao evento (0 = dia do anúncio)", dtick=1, showgrid=False)
     return fig

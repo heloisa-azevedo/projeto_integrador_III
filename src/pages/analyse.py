@@ -6,8 +6,9 @@ from src.analysis.indicadores import anos_completos, faixas_do_periodo, rotulo_t
 from src.util.componentes import (barra_lateral_dados, cuidados, destaques, exigir_base, leitura, leitura_com_ia,
                                   legenda_limiares, quadro)
 from src.util.estilo import fmt_int, fmt_pct, fmt_reais_mi
-from src.util.graficos import CONFIG, grafico_barras, grafico_cidades, grafico_linhas
+from src.util.graficos import CONFIG, grafico_barras, grafico_cidades, grafico_linhas, grafico_acao, grafico_retorno_anormal
 from src.util.graficobolha import grafico_bolhas_lojas
+from src.analysis.acao import TICKER_INDICE, base_100, baixar_precos, serie_do_grupo, tabela_eventos
 
 barra_lateral_dados()
 base, _ = exigir_base()
@@ -28,7 +29,7 @@ def grafico(fig):
     st.plotly_chart(fig, config=CONFIG)
 
 
-abas = st.tabs(["Resumo", "Crescimento", "Margens", "Capital de giro", "Expansão", "Sobreposição", "Caixa e dívida"])
+abas = st.tabs(["Resumo", "Crescimento", "Margens", "Capital de giro", "Expansão", "Sobreposição", "Caixa e dívida", "Bolsa"])
 
 # ============================================================== RESUMO
 with abas[0]:
@@ -201,3 +202,56 @@ with abas[6]:
     st.caption(situacao)
     grafico(grafico_barras(ind, [("fluxo_caixa_operacional", "Fluxo de caixa operacional", "Grupo")], "mi",
                            "Fluxo de caixa operacional (R$ milhões)"))
+
+# ============================================================== BOLSA
+@st.cache_data(ttl=60 * 60 * 12, show_spinner="Baixando cotações...")
+def _cotacoes():
+    return baixar_precos()
+
+
+with abas[7]:
+    st.subheader("Como a bolsa reagiu à fusão")
+    st.markdown('<p class="pc-nota">A Cobasi era uma empresa fechada, então só dá para medir a reação do lado da Petz. '
+                "Para cada marco da fusão, comparamos o retorno da ação com o que seria esperado pelo movimento do "
+                "Ibovespa naqueles dias (estudo de evento).</p>", unsafe_allow_html=True)
+    try:
+        precos, origem_precos = _cotacoes()
+    except Exception as erro:
+        st.info(f"As cotações não estão disponíveis agora: {erro}.", icon=":material/cloud_off:")
+    else:
+        grupo = base_100(serie_do_grupo(precos), "2024-01-01")
+        indice = base_100(precos[TICKER_INDICE], "2024-01-01")
+        grafico(grafico_acao(grupo, indice, "Ação da Petz/grupo contra o Ibovespa (base 100 em jan/24)"))
+        st.caption("Até dez/25: PETZ3. Desde jan/26: AUAU3 (uma ação nova para cada ação da Petz). O dinheiro pago aos "
+                   f"acionistas da Petz na conclusão não está incluído na linha. Fonte: {origem_precos}.")
+
+        tabela, janelas = tabela_eventos(precos)
+        if tabela.empty:
+            st.info("Não há cotações suficientes em torno dos eventos para o estudo de evento.")
+        else:
+            st.markdown("**Reação a cada marco da fusão**")
+            exibir = pd.DataFrame({
+                "Evento": tabela["evento"],
+                "Pregão": tabela["pregao"],
+                "PETZ3 no dia": tabela["retorno_dia"] * 100,
+                "Ibovespa no dia": tabela["indice_dia"] * 100,
+                "Retorno anormal (−1 a +1)": tabela["retorno_anormal"] * 100,
+                "Estatística t": tabela["t"],
+                "Fora do comum?": tabela["significativo"].map({True: "Sim", False: "Não"}),
+            })
+            st.dataframe(exibir, hide_index=True, width="stretch", column_config={
+                "Pregão": st.column_config.DateColumn(format="DD/MM/YYYY"),
+                "PETZ3 no dia": st.column_config.NumberColumn(format="%+.1f%%"),
+                "Ibovespa no dia": st.column_config.NumberColumn(format="%+.1f%%"),
+                "Retorno anormal (−1 a +1)": st.column_config.NumberColumn(format="%+.1f%%"),
+                "Estatística t": st.column_config.NumberColumn(format="%.2f"),
+            })
+            st.caption("Retorno anormal: quanto a ação variou além do esperado pelo Ibovespa, somando o pregão anterior, "
+                       "o do evento e o seguinte. \"Fora do comum\" quando a estatística t passa de 1,96 em módulo (95% de "
+                       "confiança), ou seja, a variação foi maior do que a ação costumava oscilar.")
+
+            escolhido = st.selectbox("Ver o evento em detalhe", list(janelas), key="evento_bolsa")
+            grafico(grafico_retorno_anormal(janelas[escolhido]))
+            st.caption("Barras: retorno anormal de cada pregão (escuras: os três pregões somados na tabela). "
+                       "Linha: retorno anormal acumulado desde 5 pregões antes do evento.")
+

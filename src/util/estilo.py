@@ -3,8 +3,8 @@ import math
 
 import streamlit as st
 
-MARINHO = "#1D2858"     # identidade do grupo / pro forma
-TERRACOTA = "#C56A3B"   # cor destaque da intrface
+MARINHO = "#1D2858"     
+TERRACOTA = "#C56A3B"   
 CREME = "#F6F4EA"
 TINTA_SUAVE = "#5B6283"
 CINZA = "#8A8FA3"
@@ -92,7 +92,7 @@ h1, h2, h3 {{ letter-spacing: -0.015em; }}
 }}
 
 /* ---------- Linha do tempo (é uma sequência real, por isso numerada por data) ---------- */
-.pc-timeline {{ display: grid; grid-template-columns: repeat(6, 1fr); gap: 0; margin: 1.5rem 0 0.5rem; }}
+.pc-timeline {{ display: grid; grid-template-columns: repeat(7, 1fr); gap: 0; margin: 1.5rem 0 0.5rem; }}
 .pc-evento {{ position: relative; padding: 1.6rem 1rem 0 0; border-top: 2px solid {MARINHO}; }}
 .pc-evento::before {{
     content: ""; position: absolute; top: -7px; left: 0; width: 12px; height: 12px;
