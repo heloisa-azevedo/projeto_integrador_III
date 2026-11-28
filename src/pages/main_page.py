@@ -1,7 +1,8 @@
-"""Página inicial: a pergunta, o contexto da fusão, os números principais e como a análise foi feita."""
+"""Página inicial: quem saiu melhor com a fusão, o contexto, os números principais e como a análise foi feita."""
 import streamlit as st
 
 from src.analysis.eventos import EVENTOS
+from src.analysis.bandeiras import comparar_bandeiras
 from src.analysis.indicadores import LIMIAR_PP, faixas_do_periodo, rotulo_periodo, sinal
 from src.util.componentes import barra_lateral_dados, destaques, obter_base
 from src.util.estilo import fmt_delta, fmt_pct
@@ -11,11 +12,12 @@ barra_lateral_dados()
 st.markdown(
     """
 <div class="pc-hero">
-  <h1>A fusão Petz + Cobasi aumentou o poder de mercado do grupo?</h1>
+  <h1>Quem saiu melhor com a fusão Petz + Cobasi?</h1>
   <p class="pc-lead">
-    Em janeiro de 2026, as duas maiores redes de pet shops do Brasil passaram a operar como uma só empresa.
-    Este app usa a Planilha Interativa publicada no RI do grupo para comparar o desempenho antes da fusão
-    (números pro forma, como se as empresas já estivessem juntas) com o do grupo combinado depois dela.
+    A Petz, a Cobasi, as duas ou nenhuma? Em janeiro de 2026, as duas maiores redes de pet shops do Brasil
+    passaram a operar como uma só empresa. Este app compara o desempenho antes da fusão (números pro forma,
+    como se as empresas já estivessem juntas) com o depois, usando a Planilha Interativa do RI do grupo e as
+    cotações da ação na bolsa.
   </p>
 </div>
 """,
@@ -45,6 +47,22 @@ if base is not None and base["depois"]:
         itens.append((fmt_pct(s["participacao"], 0), "das lojas ficam em cidades onde Petz e Cobasi disputavam clientes"))
     destaques(itens)
 
+    # placar das bandeiras: mesmos critérios da aba Petz × Cobasi
+    comp = comparar_bandeiras(base["indicadores"], base["antes"], base["depois"])
+    if not comp.empty:
+        placar = comp["avancou_mais"].value_counts()
+        n_petz, n_cobasi, n_empate = (int(placar.get(k, 0)) for k in ("Petz", "Cobasi", "Empate"))
+        if n_petz > n_cobasi:
+            veredito = "Petz um pouco à frente nas vendas"
+        elif n_cobasi > n_petz:
+            veredito = "Cobasi um pouco à frente nas vendas"
+        else:
+            veredito = "Empate entre as bandeiras nas vendas"
+        destaques([
+            (f"Petz {n_petz} × {n_cobasi} Cobasi", f"{veredito}: indicadores em que cada bandeira avançou mais"
+                                                  + (f" ({n_empate} {'empatado' if n_empate == 1 else 'empatados'})" if n_empate else "")),
+        ])
+
 st.subheader("Como a fusão aconteceu")
 eventos_html = "".join(
     f'<div class="pc-evento{" final" if i == len(EVENTOS) - 1 else ""}">'
@@ -58,31 +76,31 @@ st.markdown(f'<div class="pc-timeline">{eventos_html}</div>', unsafe_allow_html=
 st.write("")
 st.subheader("Como vamos responder")
 st.markdown(
-    '<p class="pc-lead">Margem maior depois de uma fusão pode ter causas diferentes. '
-    "Para separar poder de mercado de simples ganho de eficiência, olhamos quatro sinais:</p>",
+    '<p class="pc-lead">"Sair melhor" pode significar coisas diferentes, e a resposta pode mudar conforme o '
+    "ângulo. Por isso olhamos quatro frentes:</p>",
     unsafe_allow_html=True,
 )
 st.markdown(
     """
 <div class="pc-mecanismos">
   <div class="pc-mecanismo">
-    <h4>Preço e custo de compra</h4>
-    <p>Com menos concorrência, o grupo pode vender mais caro ou negociar produtos mais baratos.</p>
-    <p class="indicador">Margem bruta</p>
+    <h4>O grupo</h4>
+    <p>O resultado melhorou? Se sim, foi por poder de mercado (preço, fornecedores) ou por eficiência (despesas)?</p>
+    <p class="indicador">Margens, despesas e prazos</p>
   </div>
   <div class="pc-mecanismo">
-    <h4>Força com fornecedores</h4>
-    <p>Um comprador maior consegue pagar os fornecedores com prazos mais longos.</p>
-    <p class="indicador">Prazo médio de pagamento</p>
+    <h4>Petz × Cobasi</h4>
+    <p>Qual bandeira passou a vender mais, contra o próprio histórico e contra a outra?</p>
+    <p class="indicador">Crescimento, SSS, receita por m² e participação</p>
   </div>
   <div class="pc-mecanismo">
-    <h4>Sinergia de custos</h4>
-    <p>Juntar sede, logística e lojas reduz despesas. Isso aumenta a margem sem envolver poder de mercado.</p>
-    <p class="indicador">Despesas sobre a receita</p>
+    <h4>Os acionistas</h4>
+    <p>Como a bolsa reagiu a cada marco da fusão? A Cobasi era fechada, então só o lado da Petz pode ser medido.</p>
+    <p class="indicador">Retorno anormal da ação PETZ3</p>
   </div>
   <div class="pc-mecanismo">
-    <h4>Menos disputa local</h4>
-    <p>Onde as duas redes competiam, a fusão elimina um concorrente direto e reduz a pressão para abrir lojas.</p>
+    <h4>A concorrência local</h4>
+    <p>Onde as duas redes disputavam clientes, a fusão eliminou um concorrente direto.</p>
     <p class="indicador">Sobreposição de lojas e inaugurações</p>
   </div>
 </div>
@@ -97,6 +115,7 @@ st.markdown(
     f"efeito das datas sazonais, e também com a tendência de {anos_pre} projetada como se não houvesse fusão.</p>",
     unsafe_allow_html=True,
 )
-c1, c2 = st.columns(2)
+c1, c2, c3 = st.columns(3)
 c1.page_link("src/pages/analyse.py", label="Ver a análise", icon=":material/insights:")
-c2.page_link("src/pages/metodologia.py", label="Ver dados e método", icon=":material/table_chart:")
+c2.page_link("src/pages/conclusao.py", label="Ver a conclusão", icon=":material/task_alt:")
+c3.page_link("src/pages/metodologia.py", label="Ver dados e método", icon=":material/table_chart:")
