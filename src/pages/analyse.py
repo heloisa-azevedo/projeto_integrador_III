@@ -3,6 +3,7 @@ import pandas as pd
 import streamlit as st
 
 from src.analysis.indicadores import anos_completos, faixas_do_periodo, rotulo_trimestre
+from src.analysis.previsao import HORIZONTE_TRIMESTRES, prever_diario, prever_trimestres
 from src.util.componentes import (barra_lateral_dados, cuidados, destaques, exigir_base, leitura, leitura_com_ia,
                                   legenda_limiares, quadro)
 from src.analysis.bandeiras import (com_participacao, comparar_bandeiras, receita_contra_tendencia, sobreposicao_por_bandeira)
@@ -24,10 +25,58 @@ st.markdown(
     "gráficos marca o período pós-fusão.</p>",
     unsafe_allow_html=True,
 )
+previstos = " e ".join(rotulo_trimestre(ind.index.max() + k) for k in range(1, HORIZONTE_TRIMESTRES + 1))
+st.caption(f"Nos gráficos de linhas, o tracejado é a previsão para o semestre seguinte ({previstos}): uma regressão "
+           "linear simples para cada série, em função do tempo. O modelo não considera sazonalidade nem a fusão. "
+           "R² perto de 0 indica que a reta explica pouco do histórico. O erro no teste é o erro médio ao esconder o "
+           "último semestre e prevê-lo; se for maior que o erro de repetir o ano anterior, a previsão é fraca.")
 
 
 def grafico(fig):
     st.plotly_chart(fig, config=CONFIG)
+
+
+# ---------------------------------------------------------------- previsão do semestre seguinte
+def _fmt_previsto(valor, formato):
+    if pd.isna(valor):
+        return "–"
+    if formato == "pct":
+        return fmt_pct(valor)
+    if formato == "dias":
+        return f"{valor:.1f} dias".replace(".", ",")
+    if formato == "m2":
+        return f"R$ {fmt_int(valor)}/m²"
+    return fmt_reais_mi(valor)
+
+
+def _fmt_erro(erro, formato):
+    if formato == "pct" and pd.notna(erro):
+        return f"{erro * 100:.1f}".replace(".", ",") + " p.p."
+    return _fmt_previsto(erro, formato)
+
+
+def _fmt_r2(r2):
+    return "–" if pd.isna(r2) else f"{r2:.2f}".replace(".", ",")
+
+
+def grafico_com_previsao(df, series, formato, titulo, **opcoes):
+    """Gráfico de linhas com o semestre seguinte e, abaixo, os valores previstos e a qualidade de cada modelo."""
+    grafico(grafico_linhas(df, series, formato, titulo, prever=True, **opcoes))
+    periodos = pd.period_range(df.index.min(), df.index.max(), freq="Q")
+    linhas = []
+    for coluna, nome, _ in series:
+        modelo = prever_trimestres(df[coluna].reindex(periodos))
+        if not modelo:
+            continue
+        linha = {"Série": titulo if nome == "Real" else nome}
+        linha.update({rotulo_trimestre(p): _fmt_previsto(v, formato) for p, v in modelo["previsao"].items()})
+        linha["R²"] = _fmt_r2(modelo["r2"])
+        linha["Erro no teste"] = _fmt_erro(modelo["erro_modelo"], formato)
+        linha["Erro repetindo o ano anterior"] = _fmt_erro(modelo["erro_ingenuo"], formato)
+        linhas.append(linha)
+    if linhas:
+        with st.expander("Valores previstos e qualidade do modelo"):
+            st.dataframe(pd.DataFrame(linhas), hide_index=True, width="stretch")
 
 
 abas = st.tabs(["Resumo", "Crescimento", "Margens", "Capital de giro", "Expansão", "Sobreposição", "Caixa e dívida", "Bolsa", "Petz × Cobasi"])
@@ -71,19 +120,19 @@ with abas[1]:
     st.caption("As duas marcas continuam operando separadas depois da fusão.")
     c1, c2 = st.columns(2)
     with c1:
-        grafico(grafico_linhas(ind, [("cresc_petz", "Petz", "Petz"), ("cresc_cobasi", "Cobasi", "Cobasi")], "pct",
-                               "Crescimento da receita bruta sobre o ano anterior"))
+        grafico_com_previsao(ind, [("cresc_petz", "Petz", "Petz"), ("cresc_cobasi", "Cobasi", "Cobasi")], "pct",
+                             "Crescimento da receita bruta sobre o ano anterior")
     with c2:
-        grafico(grafico_linhas(ind, [("sss_petz", "Petz", "Petz"), ("sss_cobasi", "Cobasi", "Cobasi"),
-                                     ("sss_consolidado", "Consolidado", "Grupo")], "pct", "Vendas mesmas lojas (SSS)"))
+        grafico_com_previsao(ind, [("sss_petz", "Petz", "Petz"), ("sss_cobasi", "Cobasi", "Cobasi"),
+                                   ("sss_consolidado", "Consolidado", "Grupo")], "pct", "Vendas mesmas lojas (SSS)")
     c1, c2 = st.columns(2)
     with c1:
-        grafico(grafico_linhas(ind, [("receita_m2_petz", "Petz", "Petz"), ("receita_m2_cobasi", "Cobasi", "Cobasi")], "m2",
-                               "Receita bruta por m² de loja (R$ no trimestre)"))
+        grafico_com_previsao(ind, [("receita_m2_petz", "Petz", "Petz"), ("receita_m2_cobasi", "Cobasi", "Cobasi")], "m2",
+                             "Receita bruta por m² de loja (R$ no trimestre)")
         st.caption("Inclui as vendas digitais atribuídas a cada bandeira.")
     with c2:
-        grafico(grafico_linhas(ind, [("penetracao_digital", "Penetração digital", "Grupo")], "pct",
-                               "Penetração digital (% da receita bruta)"))
+        grafico_com_previsao(ind, [("penetracao_digital", "Penetração digital", "Grupo")], "pct",
+                             "Penetração digital (% da receita bruta)")
 
 # ============================================================== MARGENS
 METRICAS = {
@@ -98,24 +147,24 @@ with abas[2]:
     escolha = c1.segmented_control("Indicador", list(METRICAS), default="Margem bruta", key="metrica_margem") or "Margem bruta"
     coluna, explicacao = METRICAS[escolha]
     com_tendencia = c2.toggle("Tendência sem fusão", value=True, disabled=coluna not in tend)
-    grafico(grafico_linhas(ind, [(coluna, "Real", "Grupo")], "pct", escolha,
-                           tendencia=tend.get(coluna) if com_tendencia else None, altura=420))
+    grafico_com_previsao(ind, [(coluna, "Real", "Grupo")], "pct", escolha,
+                         tendencia=tend.get(coluna) if com_tendencia else None, altura=420)
     st.caption(explicacao + (f" A linha pontilhada é a tendência de {faixas['pre_anos']} projetada sem a fusão."
                              if com_tendencia and coluna in tend else ""))
 
 # ============================================================== CAPITAL DE GIRO
 with abas[3]:
-    grafico(grafico_linhas(ind, [("prazo_fornecedores", "Real", "Grupo")], "dias",
-                           "Prazo com fornecedores: real × tendência", tendencia=tend.get("prazo_fornecedores"), altura=400))
+    grafico_com_previsao(ind, [("prazo_fornecedores", "Real", "Grupo")], "dias",
+                         "Prazo com fornecedores: real × tendência", tendencia=tend.get("prazo_fornecedores"), altura=400)
     st.caption("Fornecedores no balanço ÷ CMV do trimestre × 91 dias. O quanto o real fica acima da linha pontilhada "
                "é o ganho de prazo atribuível ao período pós-fusão.")
     c1, c2 = st.columns(2)
     with c1:
-        grafico(grafico_linhas(ind, [("prazo_fornecedores", "Fornecedores", "Grupo"), ("prazo_estoques", "Estoque", 0),
-                                     ("prazo_recebimento", "Recebimento", 1)], "dias", "Prazos médios"))
+        grafico_com_previsao(ind, [("prazo_fornecedores", "Fornecedores", "Grupo"), ("prazo_estoques", "Estoque", 0),
+                                   ("prazo_recebimento", "Recebimento", 1)], "dias", "Prazos médios")
         st.caption("Estoque e fornecedores sobre o CMV; recebimento sobre a receita bruta.")
     with c2:
-        grafico(grafico_linhas(ind, [("ciclo_caixa", "Ciclo de caixa", "Grupo")], "dias", "Ciclo de caixa"))
+        grafico_com_previsao(ind, [("ciclo_caixa", "Ciclo de caixa", "Grupo")], "dias", "Ciclo de caixa")
         st.caption("Estoque + recebimento − fornecedores. Quanto menor, menos capital o grupo precisa para girar o negócio.")
 
 # ============================================================== EXPANSÃO
@@ -188,8 +237,8 @@ with abas[5]:
 
 # ============================================================== CAIXA E DÍVIDA
 with abas[6]:
-    grafico(grafico_linhas(ind, [("caixa_total", "Caixa total", "Grupo"), ("divida_bruta", "Dívida bruta", 1)], "mi",
-                           "Caixa total e dívida bruta (R$ milhões)", altura=400))
+    grafico_com_previsao(ind, [("caixa_total", "Caixa total", "Grupo"), ("divida_bruta", "Dívida bruta", 1)], "mi",
+                         "Caixa total e dívida bruta (R$ milhões)", altura=400)
     liquida = ind["divida_liquida"].dropna()
     if not liquida.empty and (liquida < 0).all():
         situacao = "O grupo tem mais caixa (incluindo aplicações financeiras) do que dívida em todo o período: caixa líquido."
@@ -224,9 +273,24 @@ with abas[7]:
     else:
         grupo = base_100(serie_do_grupo(precos), "2024-01-01")
         indice = base_100(precos[TICKER_INDICE], "2024-01-01")
-        grafico(grafico_acao(grupo, indice, "Ação da Petz/grupo contra o Ibovespa (base 100 em jan/24)"))
+        grafico(grafico_acao(grupo, indice, "Ação da Petz/grupo contra o Ibovespa (base 100 em jan/24)", prever=True))
         st.caption("Até dez/25: PETZ3. Desde jan/26: AUAU3 (uma ação nova para cada ação da Petz). O dinheiro pago aos "
                    f"acionistas da Petz na conclusão não está incluído na linha. Fonte: {origem_precos}.")
+        linhas_bolsa = []
+        for nome, serie in [("PETZ3 → AUAU3", grupo), ("Ibovespa", indice)]:
+            modelo = prever_diario(serie)
+            if modelo:
+                numero = lambda v: "–" if pd.isna(v) else f"{v:.1f}".replace(".", ",")
+                linhas_bolsa.append({
+                    "Série": nome, f"Previsto em {modelo['previsao'].index[-1]:%d/%m/%Y}": numero(modelo["previsao"].iloc[-1]),
+                    "R²": _fmt_r2(modelo["r2"]), "Erro no teste": numero(modelo["erro_modelo"]),
+                    "Erro repetindo a última cotação": numero(modelo["erro_ingenuo"]),
+                })
+        if linhas_bolsa:
+            with st.expander("Valores previstos e qualidade do modelo"):
+                st.dataframe(pd.DataFrame(linhas_bolsa), hide_index=True, width="stretch")
+                st.caption("Previsão dos próximos 6 meses, em pontos da base 100. Preço de ação é muito difícil de "
+                           "prever: a reta é só uma ilustração e não serve como recomendação de investimento.")
 
         tabela, janelas = tabela_eventos(precos)
         if tabela.empty:
@@ -341,16 +405,16 @@ with abas[8]:
             for coluna_st, b in zip([c1, c2], ["Petz", "Cobasi"]):
                 if b in tend_b:
                     with coluna_st:
-                        grafico(grafico_linhas(ind, [(f"receita_bruta_{b.lower()}", "Real", b)], "mi",
-                                               f"Receita bruta {b}: real × tendência (R$ milhões)",
-                                               tendencia=tend_b[b]))
+                        grafico_com_previsao(ind, [(f"receita_bruta_{b.lower()}", "Real", b)], "mi",
+                                             f"Receita bruta {b}: real × tendência (R$ milhões)",
+                                             tendencia=tend_b[b])
         else:
             st.info("Não há trimestres suficientes antes da fusão para estimar a tendência.")
 
         # ---- participação
         st.subheader("Quem ganhou espaço dentro do grupo")
-        grafico(grafico_linhas(com_participacao(ind), [("participacao_cobasi", "Cobasi", "Cobasi")], "pct",
-                               "Participação da Cobasi na receita bruta do grupo", altura=380))
+        grafico_com_previsao(com_participacao(ind), [("participacao_cobasi", "Cobasi", "Cobasi")], "pct",
+                             "Participação da Cobasi na receita bruta do grupo", altura=380)
         st.caption("O restante é a Petz. Se a linha sobe no período sombreado, a Cobasi ganhou espaço depois da fusão; "
                    "se desce, quem ganhou foi a Petz.")
 

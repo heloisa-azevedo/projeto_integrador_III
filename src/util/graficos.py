@@ -6,7 +6,8 @@ import plotly.graph_objects as go
 
 from src.analysis.eventos import EVENTOS, EVENTOS_NOS_GRAFICOS, TRIMESTRE_FUSAO
 from src.analysis.indicadores import rotulo_trimestre
-from src.util.estilo import CINZA, COR_EMPRESA, COR_EXTRA, COR_POS_FUSAO, MARINHO, TINTA_SUAVE
+from src.analysis.previsao import prever_diario, prever_trimestres
+from src.util.estilo import CINZA, COR_EMPRESA, COR_EXTRA, COR_POS_FUSAO, MARINHO, TERRACOTA, TINTA_SUAVE
 
 FORMATOS = {
     "pct": {"tick": ".0%", "hover": ".1%", "sufixo": ""},
@@ -73,11 +74,28 @@ def _marcar_fusao(fig, periodos, rotulos):
     fig.update_xaxes(categoryorder="array", categoryarray=rotulos, tickvals=[r for r in rotulos if r.startswith("1T")])
 
 
-def grafico_linhas(df, series, formato, titulo=None, tendencia=None, altura=360):
-    """series: lista de (coluna, nome, cor). tendencia: Series projetada (linha pontilhada cinza)."""
+def _marcar_previsao(fig, inicio, fim):
+    """Faixa clara sobre o período previsto, entre as posições (ou datas) inicio e fim."""
+    fig.add_vrect(x0=inicio, x1=fim, fillcolor=TERRACOTA, opacity=0.10, line_width=0, layer="below")
+    fig.add_annotation(x=inicio, y=0, yref="paper", text="Previsão", showarrow=False, xanchor="left",
+                       yanchor="bottom", xshift=3, font=dict(color=TERRACOTA, size=12))
+
+
+def _legenda_previsao(fig):
+    """Um único item na legenda para explicar o tracejado de todas as séries."""
+    fig.add_scatter(x=[None], y=[None], name="Previsão", mode="lines+markers",
+                    line=dict(color=TINTA_SUAVE, width=2, dash="dash"), marker=dict(symbol="diamond-open", size=8))
+
+
+def grafico_linhas(df, series, formato, titulo=None, tendencia=None, altura=360, prever=False):
+    """series: lista de (coluna, nome, cor). tendencia: Series projetada (linha pontilhada cinza).
+    prever: acrescenta o semestre seguinte, com uma regressão linear simples para cada série."""
     fig = go.Figure()
     periodos, rotulos = _eixo(df)
-    valores = pd.concat([df[c] for c, _, _ in series] + ([tendencia] if tendencia is not None else [])).dropna()
+    modelos = {c: prever_trimestres(df[c].reindex(periodos)) for c, _, _ in series} if prever else {}
+    modelos = {c: m for c, m in modelos.items() if m}
+    valores = pd.concat([df[c] for c, _, _ in series] + [m["previsao"] for m in modelos.values()]
+                        + ([tendencia] if tendencia is not None else [])).dropna()
     if formato == "pct" and not valores.empty and valores.max() - valores.min() < 0.03:
         formato = "pct1"
     f = FORMATOS[formato]
@@ -89,10 +107,34 @@ def grafico_linhas(df, series, formato, titulo=None, tendencia=None, altura=360)
         s = df[coluna].reindex(periodos)
         pos = [p >= TRIMESTRE_FUSAO for p in periodos]
         fig.add_scatter(x=rotulos, y=s, name=nome, mode="lines+markers", line=dict(color=cor(c), width=2.5),
-                        marker=dict(size=[7 if p else 0 for p in pos], color=cor(c)), hovertemplate=hover)
+                        marker=dict(size=[7 if p else 0 for p in pos], color=cor(c)), hovertemplate=hover,
+                        legendgroup=coluna)
+        if coluna in modelos:
+            previsto = modelos[coluna]["previsao"]
+            futuros = [rotulo_trimestre(p) for p in previsto.index]
+            conhecidos = s.dropna()
+            # ligação entre o último valor real e a primeira previsão (sem repetir o valor no hover)
+            fig.add_scatter(x=[rotulo_trimestre(conhecidos.index[-1]), futuros[0]],
+                            y=[conhecidos.iloc[-1], previsto.iloc[0]], mode="lines", hoverinfo="skip",
+                            line=dict(color=cor(c), width=2, dash="dash"), legendgroup=coluna, showlegend=False)
+            fig.add_scatter(x=futuros, y=previsto, name=f"{nome} (previsão)", mode="lines+markers",
+                            line=dict(color=cor(c), width=2, dash="dash"),
+                            marker=dict(symbol="diamond-open", size=9, color=cor(c)), hovertemplate=hover,
+                            legendgroup=coluna, showlegend=False)
     _layout(fig, titulo, formato, altura)
     _marcar_fusao(fig, periodos, rotulos)
-    if len(series) == 1 and tendencia is None:
+    if modelos:
+        previstos = next(iter(modelos.values()))["previsao"].index
+        todos = rotulos + [rotulo_trimestre(p) for p in previstos]
+        marcas = [r for r in todos if r.startswith("1T")]
+        if todos[-1] not in marcas:
+            marcas.append(todos[-1])
+        fig.update_xaxes(categoryarray=todos, tickvals=marcas, range=[-0.5, len(todos) - 0.5])
+        _marcar_previsao(fig, len(rotulos) - 0.5, len(todos) - 0.5)
+        _legenda_previsao(fig)
+        # legenda em fonte de sistema: o Plotly mede o texto antes da fonte da página carregar e cortava o fim do nome
+        fig.update_layout(legend_font=dict(family="Arial, sans-serif", size=13))
+    elif len(series) == 1 and tendencia is None:
         fig.update_layout(showlegend=False)
     return fig
 
@@ -187,8 +229,9 @@ def linha(lista_dados, x: str, y: str, lista_empresas):
     return fig
 
 # ---------------------------------------------------------------- ação na bolsa (aba Bolsa)
-def grafico_acao(serie_grupo, indice, titulo=None):
-    """Ação (PETZ3 e depois AUAU3) contra o Ibovespa, ambos em base 100, com os marcos da fusão."""
+def grafico_acao(serie_grupo, indice, titulo=None, prever=False):
+    """Ação (PETZ3 e depois AUAU3) contra o Ibovespa, ambos em base 100, com os marcos da fusão.
+    prever: acrescenta os 6 meses seguintes, com uma regressão linear simples para cada série."""
     fig = go.Figure()
     fig.add_scatter(x=indice.index, y=indice, name="Ibovespa", mode="lines",
                     line=dict(color=CINZA, width=2), hovertemplate="%{y:.1f}")
@@ -215,6 +258,20 @@ def grafico_acao(serie_grupo, indice, titulo=None):
         legend=dict(orientation="h", y=-0.12, x=0, title=None, font=dict(family="Arial, sans-serif", size=13)),
         hoverlabel=dict(bgcolor="white", font_color=MARINHO),
     )
+    if prever:
+        fim = None
+        for serie, nome, c in [(indice, "Ibovespa", CINZA), (serie_grupo, "PETZ3 → AUAU3", MARINHO)]:
+            modelo = prever_diario(serie)
+            if not modelo:
+                continue
+            previsto = modelo["previsao"]
+            fig.add_scatter(x=previsto.index, y=previsto, name=f"{nome} (previsão)", mode="lines",
+                            line=dict(color=c, width=2.5, dash="dash"), hovertemplate="%{y:.1f}", showlegend=False)
+            fim = previsto.index[-1] if fim is None else max(fim, previsto.index[-1])
+        if fim is not None:
+            _marcar_previsao(fig, serie_grupo.index.max(), fim)
+            fig.add_scatter(x=[None], y=[None], name="Previsão", mode="lines",
+                            line=dict(color=TINTA_SUAVE, width=2, dash="dash"))
     fig.update_yaxes(gridcolor="rgba(29,40,88,.08)", zeroline=False, ticksuffix="")
     fig.update_xaxes(showgrid=False, tickformat="%b/%y")
     return fig
