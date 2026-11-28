@@ -1,1 +1,7 @@
 chromium
+chromium-driver
+libgbm-dev
+libnss3
+libatk-bridge2.0-0
+libgtk-3-0
+openpyxl

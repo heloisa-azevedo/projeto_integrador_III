@@ -239,7 +239,7 @@ def quadro_bandeiras(comp):
             celulas.append(f'<td class="num"><span class="{classe}">{_fmt_delta_bandeira(d, l["formato"])}</span>'
                            f'<div class="explica" style="text-align:right">{_html.escape(de_para)}</div></td>')
         quem = l["avancou_mais"]
-        celulas.append(f'<td class="num">{_html.escape(quem) if quem else "–"}</td>')
+        celulas.append(f'<td class="num">{_html.escape(quem) if isinstance(quem, str) and quem else "–"}</td>')
         corpo.append(f'<tr><td><div class="nome">{_html.escape(l["nome"])}</div>'
                      f'<div class="explica">{_html.escape(l["explica"])}</div></td>{"".join(celulas)}</tr>')
     st.markdown(f'<table class="pc-quadro"><thead><tr><th>Indicador</th>{cab}</tr></thead>'
